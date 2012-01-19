@@ -19,6 +19,7 @@ LOCAL int timescaler_initial_time;
 
 LOCAL time_t (*timescaler_real_time)(time_t*) = NULL;
 LOCAL unsigned int (*timescaler_real_sleep)(unsigned int) = NULL;
+LOCAL int (*timescaler_nanosleep)(const struct timespec *req, struct timespec *rem) = NULL;
 
 
 /**
@@ -62,3 +63,19 @@ GLOBAL unsigned int sleep(unsigned int seconds)
   unsigned int return_value = timescaler_real_sleep(seconds * timescaler_scale);
   return return_value / timescaler_scale;
 }
+
+GLOBAL int nanosleep(const struct timespec *req, struct timespec *rem)
+{
+  if(!timescaler_nanosleep)
+    timescaler_nanosleep = dlsym(RTLD_NEXT, "nanosleep");
+
+  struct timespec req_scale;
+  //TODO: scale the tv_nsec element
+  req_scale.tv_sec = req->tv_sec * timescaler_scale;
+
+  int return_value = timescaler_nanosleep(&req_scale, rem);
+
+  //TODO: Downscale the second parameter
+  return return_value;
+}
+
