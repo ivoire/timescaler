@@ -14,6 +14,13 @@
 # define LOCAL
 #endif
 
+#ifdef __GNUC__
+# define unlikely(p) __builtin_expect(!!(p), 0)
+#else
+# define unlikely(p) (!!(p))
+#endif
+
+
 LOCAL int timescaler_initialized = 0;
 LOCAL int timescaler_verbosity = 0;
 LOCAL int timescaler_scale = 0;
@@ -69,7 +76,7 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
  */
 GLOBAL time_t time(time_t* tp)
 {
-  if(!timescaler_initialized)
+  if(unlikely(!timescaler_initialized))
     timescaler_init();
 
   time_t now = timescaler_real_time(tp);
@@ -79,7 +86,7 @@ GLOBAL time_t time(time_t* tp)
 
 GLOBAL int gettimeofday(struct timeval *tv, struct timezone *tz)
 {
-  if(!timescaler_initialized)
+  if(unlikely(!timescaler_initialized))
     timescaler_init();
 
   int return_value = timescaler_gettimeofday(tv, tz);
@@ -93,7 +100,7 @@ GLOBAL int gettimeofday(struct timeval *tv, struct timezone *tz)
  */
 GLOBAL unsigned int sleep(unsigned int seconds)
 {
-  if(!timescaler_initialized)
+  if(unlikely(!timescaler_initialized))
     timescaler_init();
 
   unsigned int return_value = timescaler_real_sleep(seconds * timescaler_scale);
@@ -102,7 +109,7 @@ GLOBAL unsigned int sleep(unsigned int seconds)
 
 GLOBAL int nanosleep(const struct timespec *req, struct timespec *rem)
 {
-  if(!timescaler_initialized)
+  if(unlikely(!timescaler_initialized))
     timescaler_init();
 
   struct timespec req_scale;
