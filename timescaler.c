@@ -26,9 +26,9 @@ LOCAL int timescaler_verbosity = 0;
 LOCAL int timescaler_scale = 0;
 LOCAL int timescaler_initial_time;
 
-LOCAL time_t (*timescaler_real_time)(time_t*) = NULL;
+LOCAL time_t (*timescaler_time)(time_t*) = NULL;
 LOCAL int (*timescaler_gettimeofday)(struct timeval *tv, struct timezone *tz) = NULL;
-LOCAL unsigned int (*timescaler_real_sleep)(unsigned int) = NULL;
+LOCAL unsigned int (*timescaler_sleep)(unsigned int) = NULL;
 LOCAL int (*timescaler_nanosleep)(const struct timespec *req, struct timespec *rem) = NULL;
 LOCAL unsigned int (*timescaler_alarm)(unsigned int seconds) = NULL;
 
@@ -63,10 +63,10 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
   /* Resolv the symboles that we will need afterward */
   timescaler_gettimeofday = dlsym(RTLD_NEXT, "gettimeofday");
   timescaler_nanosleep    = dlsym(RTLD_NEXT, "nanosleep");
-  timescaler_real_sleep   = dlsym(RTLD_NEXT, "sleep");
-  timescaler_real_time    = dlsym(RTLD_NEXT, "time");
+  timescaler_sleep        = dlsym(RTLD_NEXT, "sleep");
+  timescaler_time         = dlsym(RTLD_NEXT, "time");
 
-  timescaler_initial_time = timescaler_real_time(NULL);
+  timescaler_initial_time = timescaler_time(NULL);
 
   if(timescaler_verbosity > 0)
     fprintf(stdout, "TimeScaler initialized and running with scaling to %d and an intilatime of %d\n", timescaler_scale, timescaler_initial_time);
@@ -80,7 +80,7 @@ GLOBAL time_t time(time_t* tp)
   if(unlikely(!timescaler_initialized))
     timescaler_init();
 
-  time_t now = timescaler_real_time(tp);
+  time_t now = timescaler_time(tp);
   return timescaler_initial_time + (now - timescaler_initial_time) / timescaler_scale;
 }
 
@@ -104,7 +104,7 @@ GLOBAL unsigned int sleep(unsigned int seconds)
   if(unlikely(!timescaler_initialized))
     timescaler_init();
 
-  unsigned int return_value = timescaler_real_sleep(seconds * timescaler_scale);
+  unsigned int return_value = timescaler_sleep(seconds * timescaler_scale);
   return return_value / timescaler_scale;
 }
 
