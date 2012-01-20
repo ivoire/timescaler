@@ -6,6 +6,9 @@
 #define __USE_GNU
 #include <dlfcn.h>
 
+/**
+ * Hide most symboles by default and export only the hooks
+ */
 #if __GNUC__ >= 4
 # define LOCAL  __attribute__ ((visibility ("hidden")))
 # define GLOBAL __attribute__ ((visibility ("default")))
@@ -14,6 +17,9 @@
 # define LOCAL
 #endif
 
+/**
+ * The unlikely hint for the compiler as initialized check are unlikely to fail
+ */
 #ifdef __GNUC__
 # define unlikely(p) __builtin_expect(!!(p), 0)
 #else
@@ -21,15 +27,23 @@
 #endif
 
 
+/**
+ * Global configuration variables
+ */
 LOCAL int timescaler_initialized = 0;
 LOCAL int timescaler_verbosity = 0;
 LOCAL int timescaler_scale = 0;
 LOCAL int timescaler_initial_time;
 
-LOCAL time_t (*timescaler_time)(time_t*) = NULL;
-LOCAL int (*timescaler_gettimeofday)(struct timeval *tv, struct timezone *tz) = NULL;
+/**
+ * Global function pointers
+ */
+LOCAL time_t       (*timescaler_time)(time_t*) = NULL;
+LOCAL int          (*timescaler_gettimeofday)(struct timeval *tv,
+                                              struct timezone *tz) = NULL;
 LOCAL unsigned int (*timescaler_sleep)(unsigned int) = NULL;
-LOCAL int (*timescaler_nanosleep)(const struct timespec *req, struct timespec *rem) = NULL;
+LOCAL int          (*timescaler_nanosleep)(const struct timespec *req,
+                                           struct timespec *rem) = NULL;
 LOCAL unsigned int (*timescaler_alarm)(unsigned int seconds) = NULL;
 
 
@@ -72,8 +86,9 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
     fprintf(stdout, "TimeScaler initialized and running with scaling to %d and an intilatime of %d\n", timescaler_scale, timescaler_initial_time);
 }
 
+
 /**
- * Define the time function
+ * The time function
  */
 GLOBAL time_t time(time_t* tp)
 {
@@ -85,6 +100,10 @@ GLOBAL time_t time(time_t* tp)
 }
 
 
+/**
+ * The gettimeofday function
+ * TODO: Special care of the tv structure should be taken
+ */
 GLOBAL int gettimeofday(struct timeval *tv, struct timezone *tz)
 {
   if(unlikely(!timescaler_initialized))
@@ -97,7 +116,7 @@ GLOBAL int gettimeofday(struct timeval *tv, struct timezone *tz)
 
 
 /**
- * Sleep for the given seconds
+ * The sleep function
  */
 GLOBAL unsigned int sleep(unsigned int seconds)
 {
@@ -108,23 +127,28 @@ GLOBAL unsigned int sleep(unsigned int seconds)
   return return_value / timescaler_scale;
 }
 
+/**
+ * The nanosleep function
+ * TODO: Special care of the req and rem structures should eb taken
+ */
 GLOBAL int nanosleep(const struct timespec *req, struct timespec *rem)
 {
   if(unlikely(!timescaler_initialized))
     timescaler_init();
 
   struct timespec req_scale;
-  //TODO: scale the tv_nsec element
   req_scale.tv_sec = req->tv_sec * timescaler_scale;
   req_scale.tv_nsec = 0;
 
   int return_value = timescaler_nanosleep(&req_scale, rem);
 
-  //TODO: Downscale the second parameter
   return return_value;
 }
 
 
+/**
+ * The alarm function
+ */
 GLOBAL unsigned int alarm(unsigned int seconds)
 {
   if(unlikely(!timescaler_initialized))
