@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
+#include <sys/time.h>
 
 #define __USE_GNU
 #include <dlfcn.h>
@@ -18,6 +19,7 @@ LOCAL int timescaler_scale = 0;
 LOCAL int timescaler_initial_time;
 
 LOCAL time_t (*timescaler_real_time)(time_t*) = NULL;
+LOCAL int (*timescaler_gettimeofday)(struct timeval *tv, struct timezone *tz) = NULL;
 LOCAL unsigned int (*timescaler_real_sleep)(unsigned int) = NULL;
 LOCAL int (*timescaler_nanosleep)(const struct timespec *req, struct timespec *rem) = NULL;
 
@@ -51,6 +53,17 @@ GLOBAL time_t time(time_t* tp)
   time_t now = timescaler_real_time(tp);
   return timescaler_initial_time + (now - timescaler_initial_time) / timescaler_scale;
 }
+
+
+GLOBAL int gettimeofday(struct timeval *tv, struct timezone *tz)
+{
+  if(!timescaler_gettimeofday)
+    timescaler_gettimeofday = dlsym(RTLD_NEXT, "gettimeofday");
+  int return_value = timescaler_gettimeofday(tv, tz);
+  tv->tv_sec = timescaler_initial_time + (tv->tv_sec - timescaler_initial_time) / timescaler_scale;
+  return return_value;
+}
+
 
 /**
  * Sleep for the given seconds
