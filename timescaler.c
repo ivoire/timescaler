@@ -116,6 +116,7 @@ GLOBAL int nanosleep(const struct timespec *req, struct timespec *rem)
   struct timespec req_scale;
   //TODO: scale the tv_nsec element
   req_scale.tv_sec = req->tv_sec * timescaler_scale;
+  req_scale.tv_nsec = 0;
 
   int return_value = timescaler_nanosleep(&req_scale, rem);
 
