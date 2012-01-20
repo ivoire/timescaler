@@ -30,6 +30,7 @@ LOCAL time_t (*timescaler_real_time)(time_t*) = NULL;
 LOCAL int (*timescaler_gettimeofday)(struct timeval *tv, struct timezone *tz) = NULL;
 LOCAL unsigned int (*timescaler_real_sleep)(unsigned int) = NULL;
 LOCAL int (*timescaler_nanosleep)(const struct timespec *req, struct timespec *rem) = NULL;
+LOCAL unsigned int (*timescaler_alarm)(unsigned int seconds) = NULL;
 
 
 /**
@@ -120,5 +121,14 @@ GLOBAL int nanosleep(const struct timespec *req, struct timespec *rem)
 
   //TODO: Downscale the second parameter
   return return_value;
+}
+
+
+GLOBAL unsigned int alarm(unsigned int seconds)
+{
+  if(unlikely(!timescaler_initialized))
+    timescaler_init();
+
+  return timescaler_alarm(seconds * timescaler_scale) / timescaler_scale;
 }
 
