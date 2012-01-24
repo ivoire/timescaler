@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
+#include <sys/select.h>
 #include <sys/time.h>
 
 #define __USE_GNU
@@ -45,7 +46,13 @@ LOCAL unsigned int (*timescaler_sleep)(unsigned int) = NULL;
 LOCAL int          (*timescaler_nanosleep)(const struct timespec *req,
                                            struct timespec *rem) = NULL;
 LOCAL unsigned int (*timescaler_alarm)(unsigned int seconds) = NULL;
-
+LOCAL int          (*timescaler_select)(int nfds, fd_set *readfds,
+                                        fd_set *writefds, fd_set *exceptfds,
+                                        struct timeval *timeout) = NULL;
+LOCAL int          (*timescaler_pselect)(int nfds, fd_set *readfds,
+                                         fd_set *writefds, fd_set *exceptfds,
+                                         const struct timespec *timeout,
+                                         const sigset_t *sigmask) = NULL;
 
 /**
  * Constructor function that read the environment variables
@@ -77,6 +84,8 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
   /* Resolv the symboles that we will need afterward */
   timescaler_gettimeofday = dlsym(RTLD_NEXT, "gettimeofday");
   timescaler_nanosleep    = dlsym(RTLD_NEXT, "nanosleep");
+  timescaler_pselect      = dlsym(RTLD_NEXT, "pselect");
+  timescaler_select       = dlsym(RTLD_NEXT, "select");
   timescaler_sleep        = dlsym(RTLD_NEXT, "sleep");
   timescaler_time         = dlsym(RTLD_NEXT, "time");
 
@@ -157,3 +166,34 @@ GLOBAL unsigned int alarm(unsigned int seconds)
   return timescaler_alarm(seconds * timescaler_scale) / timescaler_scale;
 }
 
+/**
+ * The select function
+ * TODO: Special care of the tv structure should be taken
+ */
+int select(int nfds, fd_set *readfds, fd_set *writefds,
+           fd_set *exceptfds, struct timeval *timeout)
+{
+  struct timeval timeout_scale = { timeout->tv_sec * timescaler_scale, 0 };
+  int return_value = timescaler_select(nfds, readfds, writefds, exceptfds, &timeout_scale);
+
+  if(timeout_scale.tv_sec != timeout->tv_sec * timescaler_scale)
+  {
+    timeout->tv_sec = timeout_scale.tv_sec / timescaler_scale;
+    timeout->tv_usec = 0;
+  }
+
+  return return_value;
+}
+
+/**
+ * The pselect fnction
+ * TODO: Special care of the tv structure should be taken
+ */
+int pselect(int nfds, fd_set *readfds, fd_set *writefds,
+            fd_set *exceptfds, const struct timespec *timeout,
+            const sigset_t *sigmask)
+{
+  struct timespec timeout_scale = { timeout->tv_sec * timescaler_scale, 0 };
+  return timescaler_pselect(nfds, readfds, writefds, exceptfds, &timeout_scale,
+                            sigmask);
+}
