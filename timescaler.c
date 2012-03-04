@@ -173,6 +173,9 @@ GLOBAL unsigned int alarm(unsigned int seconds)
 int select(int nfds, fd_set *readfds, fd_set *writefds,
            fd_set *exceptfds, struct timeval *timeout)
 {
+  if(unlikely(!timescaler_initialized))
+    timescaler_init();
+
   struct timeval timeout_scale = { timeout->tv_sec * timescaler_scale, 0 };
   int return_value = timescaler_select(nfds, readfds, writefds, exceptfds, &timeout_scale);
 
@@ -193,6 +196,9 @@ int pselect(int nfds, fd_set *readfds, fd_set *writefds,
             fd_set *exceptfds, const struct timespec *timeout,
             const sigset_t *sigmask)
 {
+  if(unlikely(!timescaler_initialized))
+    timescaler_init();
+
   struct timespec timeout_scale = { timeout->tv_sec * timescaler_scale, 0 };
   return timescaler_pselect(nfds, readfds, writefds, exceptfds, &timeout_scale,
                             sigmask);
