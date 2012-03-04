@@ -88,6 +88,7 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
   timescaler_select       = dlsym(RTLD_NEXT, "select");
   timescaler_sleep        = dlsym(RTLD_NEXT, "sleep");
   timescaler_time         = dlsym(RTLD_NEXT, "time");
+  timescaler_alarm        = dlsym(RTLD_NEXT, "alarm");
 
   timescaler_initial_time = timescaler_time(NULL);
 
