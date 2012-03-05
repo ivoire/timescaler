@@ -33,7 +33,7 @@
  */
 LOCAL int timescaler_initialized = 0;
 LOCAL int timescaler_verbosity = 0;
-LOCAL int timescaler_scale = 0;
+LOCAL int timescaler_scale = 1;
 LOCAL int timescaler_initial_time;
 
 /**
