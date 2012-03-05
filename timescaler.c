@@ -39,20 +39,20 @@ LOCAL int timescaler_initial_time;
 /**
  * Global function pointers
  */
-LOCAL time_t       (*timescaler_time)(time_t*) = NULL;
+LOCAL unsigned int (*timescaler_alarm)(unsigned int seconds) = NULL;
 LOCAL int          (*timescaler_gettimeofday)(struct timeval *tv,
                                               struct timezone *tz) = NULL;
-LOCAL unsigned int (*timescaler_sleep)(unsigned int) = NULL;
 LOCAL int          (*timescaler_nanosleep)(const struct timespec *req,
                                            struct timespec *rem) = NULL;
-LOCAL unsigned int (*timescaler_alarm)(unsigned int seconds) = NULL;
-LOCAL int          (*timescaler_select)(int nfds, fd_set *readfds,
-                                        fd_set *writefds, fd_set *exceptfds,
-                                        struct timeval *timeout) = NULL;
 LOCAL int          (*timescaler_pselect)(int nfds, fd_set *readfds,
                                          fd_set *writefds, fd_set *exceptfds,
                                          const struct timespec *timeout,
                                          const sigset_t *sigmask) = NULL;
+LOCAL int          (*timescaler_select)(int nfds, fd_set *readfds,
+                                        fd_set *writefds, fd_set *exceptfds,
+                                        struct timeval *timeout) = NULL;
+LOCAL unsigned int (*timescaler_sleep)(unsigned int) = NULL;
+LOCAL time_t       (*timescaler_time)(time_t*) = NULL;
 
 /**
  * Constructor function that read the environment variables
@@ -82,13 +82,13 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
 
 
   /* Resolv the symboles that we will need afterward */
+  timescaler_alarm        = dlsym(RTLD_NEXT, "alarm");
   timescaler_gettimeofday = dlsym(RTLD_NEXT, "gettimeofday");
   timescaler_nanosleep    = dlsym(RTLD_NEXT, "nanosleep");
   timescaler_pselect      = dlsym(RTLD_NEXT, "pselect");
   timescaler_select       = dlsym(RTLD_NEXT, "select");
   timescaler_sleep        = dlsym(RTLD_NEXT, "sleep");
   timescaler_time         = dlsym(RTLD_NEXT, "time");
-  timescaler_alarm        = dlsym(RTLD_NEXT, "alarm");
 
   timescaler_initial_time = timescaler_time(NULL);
 
