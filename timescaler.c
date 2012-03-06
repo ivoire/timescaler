@@ -1,3 +1,5 @@
+#include <errno.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
@@ -54,6 +56,46 @@ LOCAL int          (*timescaler_select)(int nfds, fd_set *readfds,
 LOCAL unsigned int (*timescaler_sleep)(unsigned int) = NULL;
 LOCAL time_t       (*timescaler_time)(time_t*) = NULL;
 
+
+/**
+ * The logging levels from error to debug
+ */
+typedef enum
+{
+  ERROR = 1,
+  WARNING = 2,
+  DEBUG = 3
+} log_level;
+
+static const char *psz_log_level[] =
+{
+  "ERROR",
+  "WARNING",
+  "DEBUG"
+};
+
+/**
+ * Logging function for the timescaler library
+ * @param level: the level of the message
+ * @param psz_fmt: the message to print
+ * @return nothing
+ */
+static inline void timescaler_log(log_level level, const char *psz_fmt, ...)
+{
+  if(unlikely(level <= timescaler_verbosity))
+  {
+    if(level > 3) level = 3;
+
+    va_list args;
+    va_start(args, psz_fmt);
+    fprintf(stderr, "[%s] ", psz_log_level[level - 1]);
+    vfprintf(stderr, psz_fmt, args);
+    fprintf(stderr, "\n");
+    va_end(args);
+  }
+}
+
+
 /**
  * Constructor function that read the environment variables
  * and get the right initial time
@@ -105,6 +147,8 @@ GLOBAL time_t time(time_t* tp)
   if(unlikely(!timescaler_initialized))
     timescaler_init();
 
+  timescaler_log(DEBUG, "Calling 'time'");
+
   time_t now = timescaler_time(tp);
   return timescaler_initial_time + (now - timescaler_initial_time) / timescaler_scale;
 }
@@ -118,6 +162,8 @@ GLOBAL int gettimeofday(struct timeval *tv, struct timezone *tz)
 {
   if(unlikely(!timescaler_initialized))
     timescaler_init();
+
+  timescaler_log(DEBUG, "Calling 'gettimeofday'");
 
   int return_value = timescaler_gettimeofday(tv, tz);
   tv->tv_sec = timescaler_initial_time + (tv->tv_sec - timescaler_initial_time) / timescaler_scale;
@@ -133,6 +179,8 @@ GLOBAL unsigned int sleep(unsigned int seconds)
   if(unlikely(!timescaler_initialized))
     timescaler_init();
 
+  timescaler_log(DEBUG, "Calling 'sleep'");
+
   unsigned int return_value = timescaler_sleep(seconds * timescaler_scale);
   return return_value / timescaler_scale;
 }
@@ -145,6 +193,8 @@ GLOBAL int nanosleep(const struct timespec *req, struct timespec *rem)
 {
   if(unlikely(!timescaler_initialized))
     timescaler_init();
+
+  timescaler_log(DEBUG, "Calling 'nanosleep'");
 
   struct timespec req_scale;
   req_scale.tv_sec = req->tv_sec * timescaler_scale;
@@ -164,6 +214,8 @@ GLOBAL unsigned int alarm(unsigned int seconds)
   if(unlikely(!timescaler_initialized))
     timescaler_init();
 
+  timescaler_log(DEBUG, "Calling 'alarm'");
+
   return timescaler_alarm(seconds * timescaler_scale) / timescaler_scale;
 }
 
@@ -176,6 +228,8 @@ int select(int nfds, fd_set *readfds, fd_set *writefds,
 {
   if(unlikely(!timescaler_initialized))
     timescaler_init();
+
+  timescaler_log(DEBUG, "Calling 'select'");
 
   struct timeval timeout_scale = { timeout->tv_sec * timescaler_scale, 0 };
   int return_value = timescaler_select(nfds, readfds, writefds, exceptfds, &timeout_scale);
@@ -199,6 +253,8 @@ int pselect(int nfds, fd_set *readfds, fd_set *writefds,
 {
   if(unlikely(!timescaler_initialized))
     timescaler_init();
+
+  timescaler_log(DEBUG, "Calling 'pselect'");
 
   struct timespec timeout_scale = { timeout->tv_sec * timescaler_scale, 0 };
   return timescaler_pselect(nfds, readfds, writefds, exceptfds, &timeout_scale,
