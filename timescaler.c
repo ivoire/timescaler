@@ -37,11 +37,13 @@ LOCAL int timescaler_initialized = 0;
 LOCAL int timescaler_verbosity = 0;
 LOCAL int timescaler_scale = 1;
 LOCAL int timescaler_initial_time;
+LOCAL int timescaler_initial_clock;
 
 /**
  * Global function pointers
  */
 LOCAL unsigned int (*timescaler_alarm)(unsigned int seconds) = NULL;
+LOCAL int          (*timescaler_clock_gettime)(clockid_t, struct timespec *) = NULL;
 LOCAL int          (*timescaler_gettimeofday)(struct timeval *tv,
                                               struct timezone *tz) = NULL;
 LOCAL int          (*timescaler_nanosleep)(const struct timespec *req,
@@ -122,20 +124,29 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
   if(psz_scale)
     timescaler_scale = atoi(psz_scale);
 
-
   /* Resolv the symboles that we will need afterward */
-  timescaler_alarm        = dlsym(RTLD_NEXT, "alarm");
-  timescaler_gettimeofday = dlsym(RTLD_NEXT, "gettimeofday");
-  timescaler_nanosleep    = dlsym(RTLD_NEXT, "nanosleep");
-  timescaler_pselect      = dlsym(RTLD_NEXT, "pselect");
-  timescaler_select       = dlsym(RTLD_NEXT, "select");
-  timescaler_sleep        = dlsym(RTLD_NEXT, "sleep");
-  timescaler_time         = dlsym(RTLD_NEXT, "time");
+  timescaler_alarm         = dlsym(RTLD_NEXT, "alarm");
+  timescaler_clock_gettime = dlsym(RTLD_NEXT, "clock_gettime");
+  timescaler_gettimeofday  = dlsym(RTLD_NEXT, "gettimeofday");
+  timescaler_nanosleep     = dlsym(RTLD_NEXT, "nanosleep");
+  timescaler_pselect       = dlsym(RTLD_NEXT, "pselect");
+  timescaler_select        = dlsym(RTLD_NEXT, "select");
+  timescaler_sleep         = dlsym(RTLD_NEXT, "sleep");
+  timescaler_time          = dlsym(RTLD_NEXT, "time");
 
+  /* Get some time references */
   timescaler_initial_time = timescaler_time(NULL);
 
-  if(timescaler_verbosity > 0)
-    fprintf(stdout, "TimeScaler initialized and running with scaling to %d and an intilatime of %d\n", timescaler_scale, timescaler_initial_time);
+  if(timescaler_clock_gettime)
+  {
+    struct timespec tp;
+    timescaler_clock_gettime(CLOCK_REALTIME, &tp);
+    timescaler_initial_clock = tp.tv_sec;
+  }
+
+  timescaler_log(DEBUG, "Timescaler initialization finished with:");
+  timescaler_log(DEBUG, " * verbosity=%d", timescaler_verbosity);
+  timescaler_log(DEBUG, " * scale=%d", timescaler_scale);
 }
 
 
@@ -151,6 +162,31 @@ GLOBAL time_t time(time_t* tp)
 
   time_t now = timescaler_time(tp);
   return timescaler_initial_time + (now - timescaler_initial_time) / timescaler_scale;
+}
+
+/**
+ * The clock_gettime function
+ * TODO: special care of the tp structure should be taken
+ * TODO: more clk_id should be used
+ */
+GLOBAL int clock_gettime(clockid_t clk_id, struct timespec *tp)
+{
+  if(unlikely(!timescaler_initialized))
+    timescaler_init();
+
+  timescaler_log(DEBUG, "Calling 'clock_gettime'");
+
+  if(clk_id != CLOCK_REALTIME && clk_id != CLOCK_MONOTONIC)
+  {
+    timescaler_log(ERROR, "Wrong clock given to clock_gettime\n");
+    return EINVAL;
+  }
+
+  int return_value = timescaler_clock_gettime(clk_id, tp);
+  timescaler_log(DEBUG, "\treturn tv_sec=%d", tp->tv_sec);
+  tp->tv_sec = timescaler_initial_clock + (tp->tv_sec - timescaler_initial_clock) / timescaler_scale;
+  tp->tv_nsec /= timescaler_scale;
+  return return_value;
 }
 
 
