@@ -1,3 +1,4 @@
+#include <math.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -183,9 +184,12 @@ GLOBAL int clock_gettime(clockid_t clk_id, struct timespec *tp)
   }
 
   int return_value = timescaler_clock_gettime(clk_id, tp);
-  timescaler_log(DEBUG, "\treturn tv_sec=%d", tp->tv_sec);
-  tp->tv_sec = timescaler_initial_clock + (tp->tv_sec - timescaler_initial_clock) / timescaler_scale;
-  tp->tv_nsec /= timescaler_scale;
+
+  double now = (tp->tv_sec + (double)tp->tv_nsec / 1000000000L);
+  double time = timescaler_initial_clock + (now - timescaler_initial_clock) / timescaler_scale;
+  tp->tv_sec = floor(time);
+  tp->tv_nsec = (time - tp->tv_sec) * 1000000000L;
+
   return return_value;
 }
 
@@ -202,7 +206,12 @@ GLOBAL int gettimeofday(struct timeval *tv, struct timezone *tz)
   timescaler_log(DEBUG, "Calling 'gettimeofday'");
 
   int return_value = timescaler_gettimeofday(tv, tz);
-  tv->tv_sec = timescaler_initial_time + (tv->tv_sec - timescaler_initial_time) / timescaler_scale;
+  double now = (tv->tv_sec + (double)tv->tv_usec / 1000000L);
+  double time = timescaler_initial_clock + (now - timescaler_initial_time) / timescaler_scale;
+
+  tv->tv_sec = floor(time);
+  tv->tv_usec = (time - tv->tv_sec) * 1000000L;
+
   return return_value;
 }
 
@@ -234,9 +243,9 @@ GLOBAL int nanosleep(const struct timespec *req, struct timespec *rem)
 
   struct timespec req_scale = { };
 
-  long int nsec = req->tv_nsec * timescaler_scale;
-  req_scale.tv_nsec = nsec % 1000000000L;
-  req_scale.tv_sec = (req->tv_sec * timescaler_scale) + (nsec - req_scale.tv_nsec) / 1000000000L;
+  double time = (req->tv_sec + (double)req->tv_nsec / 1000000000L) * timescaler_scale;
+  req_scale.tv_sec = floor(time);
+  req_scale.tv_nsec = (time - req_scale.tv_sec) * 1000000000L;
 
   int return_value = timescaler_nanosleep(&req_scale, rem);
 
