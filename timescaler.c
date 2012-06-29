@@ -33,11 +33,11 @@
 /**
  * Global configuration variables
  */
-LOCAL int timescaler_initialized = 0;
-LOCAL int timescaler_verbosity = 0;
-LOCAL int timescaler_scale = 1;
-LOCAL int timescaler_initial_time;
-LOCAL int timescaler_initial_clock;
+LOCAL int   timescaler_initialized = 0;
+LOCAL int   timescaler_verbosity = 0;
+LOCAL float timescaler_scale = 1.0f;
+LOCAL int   timescaler_initial_time;
+LOCAL int   timescaler_initial_clock;
 
 /**
  * Global function pointers
@@ -122,7 +122,7 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
 
   const char *psz_scale = getenv("TIMESCALER_SCALE");
   if(psz_scale)
-    timescaler_scale = atoi(psz_scale);
+    timescaler_scale = atof(psz_scale);
 
   /* Resolv the symboles that we will need afterward */
   timescaler_alarm         = dlsym(RTLD_NEXT, "alarm");
