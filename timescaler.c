@@ -45,6 +45,9 @@ LOCAL int   timescaler_initial_clock;
  */
 LOCAL unsigned int (*timescaler_alarm)(unsigned int seconds) = NULL;
 LOCAL int          (*timescaler_clock_gettime)(clockid_t, struct timespec *) = NULL;
+LOCAL int          (*timescaler_clock_nanosleep)(clockid_t clock_id, int flags,
+                                                 const struct timespec *request,
+                                                 struct timespec *remain) = NULL;
 LOCAL int          (*timescaler_gettimeofday)(struct timeval *tv,
                                               struct timezone *tz) = NULL;
 LOCAL int          (*timescaler_nanosleep)(const struct timespec *req,
@@ -126,14 +129,15 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
     timescaler_scale = atof(psz_scale);
 
   /* Resolv the symboles that we will need afterward */
-  timescaler_alarm         = dlsym(RTLD_NEXT, "alarm");
-  timescaler_clock_gettime = dlsym(RTLD_NEXT, "clock_gettime");
-  timescaler_gettimeofday  = dlsym(RTLD_NEXT, "gettimeofday");
-  timescaler_nanosleep     = dlsym(RTLD_NEXT, "nanosleep");
-  timescaler_pselect       = dlsym(RTLD_NEXT, "pselect");
-  timescaler_select        = dlsym(RTLD_NEXT, "select");
-  timescaler_sleep         = dlsym(RTLD_NEXT, "sleep");
-  timescaler_time          = dlsym(RTLD_NEXT, "time");
+  timescaler_alarm           = dlsym(RTLD_NEXT, "alarm");
+  timescaler_clock_gettime   = dlsym(RTLD_NEXT, "clock_gettime");
+  timescaler_clock_nanosleep = dlsym(RTLD_NEXT, "clock_nanosleep");
+  timescaler_gettimeofday    = dlsym(RTLD_NEXT, "gettimeofday");
+  timescaler_nanosleep       = dlsym(RTLD_NEXT, "nanosleep");
+  timescaler_pselect         = dlsym(RTLD_NEXT, "pselect");
+  timescaler_select          = dlsym(RTLD_NEXT, "select");
+  timescaler_sleep           = dlsym(RTLD_NEXT, "sleep");
+  timescaler_time            = dlsym(RTLD_NEXT, "time");
 
   /* Get some time references */
   timescaler_initial_time = timescaler_time(NULL);
@@ -190,7 +194,47 @@ GLOBAL int clock_gettime(clockid_t clk_id, struct timespec *tp)
   tp->tv_sec = floor(time);
   tp->tv_nsec = (time - tp->tv_sec) * 1000000000L;
 
+  timescaler_log(DEBUG, "tv_sec=%d, tv_nsec=%d", tp->tv_sec, tp->tv_nsec);
+
   return return_value;
+}
+
+
+int clock_nanosleep(clockid_t clk_id, int flags,
+                           const struct timespec *req,
+                           struct timespec *remain)
+{
+  if(unlikely(!timescaler_initialized))
+    timescaler_init();
+
+  timescaler_log(DEBUG, "Calling 'clock_nanosleep'");
+
+  if(clk_id != CLOCK_REALTIME && clk_id != CLOCK_MONOTONIC)
+  {
+    timescaler_log(ERROR, "Wrong clock given to clock_nanosleep");
+    return EINVAL;
+  }
+
+  /* Wait for a time relative to the current time */
+  if(flags == 0)
+  {
+    /* TODO: check the return value for remaining time to sleep */
+    struct timespec req_scale = { };
+
+    double time = (req->tv_sec + (double)req->tv_nsec / 1000000000L) * timescaler_scale;
+    req_scale.tv_sec = floor(time);
+    req_scale.tv_nsec = (time - req_scale.tv_sec) * 1000000000L;
+
+    int return_value = timescaler_clock_nanosleep(clk_id, flags, &req_scale, remain);
+    return return_value;
+  }
+  /*  Wait until a certain point in the future */
+  else
+  {
+    /* TODO: to implement */
+    timescaler_log(ERROR, "Waiting for an absolute time is not implemented in clock_nanosleep");
+    return EFAULT;
+  }
 }
 
 
