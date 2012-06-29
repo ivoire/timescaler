@@ -179,7 +179,7 @@ GLOBAL int clock_gettime(clockid_t clk_id, struct timespec *tp)
 
   if(clk_id != CLOCK_REALTIME && clk_id != CLOCK_MONOTONIC)
   {
-    timescaler_log(ERROR, "Wrong clock given to clock_gettime\n");
+    timescaler_log(ERROR, "Wrong clock given to clock_gettime");
     return EINVAL;
   }
 
@@ -196,7 +196,6 @@ GLOBAL int clock_gettime(clockid_t clk_id, struct timespec *tp)
 
 /**
  * The gettimeofday function
- * TODO: Special care of the tv structure should be taken
  */
 GLOBAL int gettimeofday(struct timeval *tv, struct timezone *tz)
 {
