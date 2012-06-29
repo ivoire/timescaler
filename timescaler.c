@@ -267,13 +267,22 @@ int select(int nfds, fd_set *readfds, fd_set *writefds,
 
   timescaler_log(DEBUG, "Calling 'select'");
 
-  struct timeval timeout_scale = { timeout->tv_sec * timescaler_scale, 0 };
-  int return_value = timescaler_select(nfds, readfds, writefds, exceptfds, &timeout_scale);
-
-  if(timeout_scale.tv_sec != timeout->tv_sec * timescaler_scale)
+  /* Take into account the timeout can bu NULL */
+  int return_value;
+  if(timeout)
   {
-    timeout->tv_sec = timeout_scale.tv_sec / timescaler_scale;
-    timeout->tv_usec = 0;
+    struct timeval timeout_scale = { timeout->tv_sec * timescaler_scale, 0 };
+    return_value = timescaler_select(nfds, readfds, writefds, exceptfds, &timeout_scale);
+
+    if(timeout_scale.tv_sec != timeout->tv_sec * timescaler_scale)
+    {
+      timeout->tv_sec = timeout_scale.tv_sec / timescaler_scale;
+      timeout->tv_usec = 0;
+    }
+  }
+  else
+  {
+    return_value = timescaler_select(nfds, readfds, writefds, exceptfds, NULL);
   }
 
   return return_value;
