@@ -103,6 +103,10 @@ static inline int is_hooked(hook_id id)
   return (timescaler_hooks & id) != 0;
 }
 
+#define PROLOGUE()                                  \
+  if(unlikely(!timescaler_initialized))             \
+    timescaler_init();                              \
+  timescaler_log(DEBUG, "Calling '%s", __func__);
 
 /**
  * Logging function for the timescaler library
@@ -224,10 +228,7 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
  */
 GLOBAL time_t time(time_t* tp)
 {
-  if(unlikely(!timescaler_initialized))
-    timescaler_init();
-
-  timescaler_log(DEBUG, "Calling 'time'");
+  PROLOGUE();
 
   if(unlikely(!is_hooked(TIME)))
     return timescaler_time(tp);
@@ -243,10 +244,7 @@ GLOBAL time_t time(time_t* tp)
  */
 GLOBAL int clock_gettime(clockid_t clk_id, struct timespec *tp)
 {
-  if(unlikely(!timescaler_initialized))
-    timescaler_init();
-
-  timescaler_log(DEBUG, "Calling 'clock_gettime'");
+  PROLOGUE();
 
   if(unlikely(!is_hooked(CLOCK_GETTIME)))
     return timescaler_clock_gettime(clk_id, tp);
@@ -274,10 +272,7 @@ int clock_nanosleep(clockid_t clk_id, int flags,
                            const struct timespec *req,
                            struct timespec *remain)
 {
-  if(unlikely(!timescaler_initialized))
-    timescaler_init();
-
-  timescaler_log(DEBUG, "Calling 'clock_nanosleep'");
+  PROLOGUE();
 
   if(unlikely(!is_hooked(CLOCK_NANOSLEEP)))
     return timescaler_clock_nanosleep(clk_id, flags, req, remain);
@@ -316,10 +311,7 @@ int clock_nanosleep(clockid_t clk_id, int flags,
  */
 GLOBAL int gettimeofday(struct timeval *tv, struct timezone *tz)
 {
-  if(unlikely(!timescaler_initialized))
-    timescaler_init();
-
-  timescaler_log(DEBUG, "Calling 'gettimeofday'");
+  PROLOGUE();
 
   if(unlikely(!is_hooked(GETTIMEOFDAY)))
     return timescaler_gettimeofday(tv, tz);
@@ -340,10 +332,7 @@ GLOBAL int gettimeofday(struct timeval *tv, struct timezone *tz)
  */
 GLOBAL unsigned int sleep(unsigned int seconds)
 {
-  if(unlikely(!timescaler_initialized))
-    timescaler_init();
-
-  timescaler_log(DEBUG, "Calling 'sleep'");
+  PROLOGUE();
 
   if(unlikely(!is_hooked(SLEEP)))
     return timescaler_sleep(seconds);
@@ -358,10 +347,7 @@ GLOBAL unsigned int sleep(unsigned int seconds)
  */
 GLOBAL int nanosleep(const struct timespec *req, struct timespec *rem)
 {
-  if(unlikely(!timescaler_initialized))
-    timescaler_init();
-
-  timescaler_log(DEBUG, "Calling 'nanosleep'");
+  PROLOGUE();
 
   if(unlikely(!is_hooked(NANOSLEEP)))
     return timescaler_nanosleep(req, rem);
@@ -383,10 +369,7 @@ GLOBAL int nanosleep(const struct timespec *req, struct timespec *rem)
  */
 GLOBAL unsigned int alarm(unsigned int seconds)
 {
-  if(unlikely(!timescaler_initialized))
-    timescaler_init();
-
-  timescaler_log(DEBUG, "Calling 'alarm'");
+  PROLOGUE();
 
   if(unlikely(!is_hooked(ALARM)))
     return timescaler_alarm(seconds);
@@ -401,10 +384,7 @@ GLOBAL unsigned int alarm(unsigned int seconds)
 int select(int nfds, fd_set *readfds, fd_set *writefds,
            fd_set *exceptfds, struct timeval *timeout)
 {
-  if(unlikely(!timescaler_initialized))
-    timescaler_init();
-
-  timescaler_log(DEBUG, "Calling 'select'");
+  PROLOGUE();
 
   if(unlikely(!is_hooked(SELECT)))
     return timescaler_select(nfds, readfds, writefds, exceptfds, timeout);
@@ -438,10 +418,7 @@ int pselect(int nfds, fd_set *readfds, fd_set *writefds,
             fd_set *exceptfds, const struct timespec *timeout,
             const sigset_t *sigmask)
 {
-  if(unlikely(!timescaler_initialized))
-    timescaler_init();
-
-  timescaler_log(DEBUG, "Calling 'pselect'");
+  PROLOGUE();
 
   if(unlikely(!is_hooked(PSELECT)))
     return timescaler_pselect(nfds, readfds, writefds, exceptfds, timeout, sigmask);
