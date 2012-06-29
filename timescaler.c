@@ -232,9 +232,11 @@ GLOBAL int nanosleep(const struct timespec *req, struct timespec *rem)
 
   timescaler_log(DEBUG, "Calling 'nanosleep'");
 
-  struct timespec req_scale;
-  req_scale.tv_sec = req->tv_sec * timescaler_scale;
-  req_scale.tv_nsec = 0;
+  struct timespec req_scale = { };
+
+  long int nsec = req->tv_nsec * timescaler_scale;
+  req_scale.tv_nsec = nsec % 1000000000L;
+  req_scale.tv_sec = (req->tv_sec * timescaler_scale) + (nsec - req_scale.tv_nsec) / 1000000000L;
 
   int return_value = timescaler_nanosleep(&req_scale, rem);
 
