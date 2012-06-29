@@ -3,7 +3,7 @@ INSTALL = install
 PREFIX  = /usr/local
 CC      = gcc
 CFLAGS  = -Wall -O2
-LDFLAGS = -ldl -fPIC
+LDFLAGS = -ldl -lrt -fPIC
 
 
 all: timescaler.so
