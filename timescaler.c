@@ -151,7 +151,7 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
 
   timescaler_log(DEBUG, "Timescaler initialization finished with:");
   timescaler_log(DEBUG, " * verbosity=%d", timescaler_verbosity);
-  timescaler_log(DEBUG, " * scale=%d", timescaler_scale);
+  timescaler_log(DEBUG, " * scale=%f", timescaler_scale);
 }
 
 
