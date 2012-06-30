@@ -1,10 +1,11 @@
-#include <math.h>
 #include <errno.h>
+#include <linux/futex.h>    /* futex */
+#include <math.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>         /* strstr */
-#include <time.h>
+#include <time.h>           /* alarm */
 #include <sys/select.h>
 #include <sys/time.h>
 
@@ -50,6 +51,11 @@ LOCAL int          (*timescaler_clock_gettime)(clockid_t, struct timespec *) = N
 LOCAL int          (*timescaler_clock_nanosleep)(clockid_t clock_id, int flags,
                                                  const struct timespec *request,
                                                  struct timespec *remain) = NULL;
+
+LOCAL int           (*timescaler_futex)(int *uaddr, int op, int val,
+                                        const struct timespec *timeout,
+                                        int *uaddr2, int val3) = NULL;
+
 LOCAL int          (*timescaler_gettimeofday)(struct timeval *tv,
                                               struct timezone *tz) = NULL;
 LOCAL int          (*timescaler_nanosleep)(const struct timespec *req,
@@ -87,14 +93,15 @@ typedef enum
   ALARM             = 1 << 0,
   CLOCK_GETTIME     = 1 << 1,
   CLOCK_NANOSLEEP   = 1 << 2,
-  GETTIMEOFDAY      = 1 << 3,
-  NANOSLEEP         = 1 << 4,
-  PSELECT           = 1 << 5,
-  SELECT            = 1 << 6,
-  SLEEP             = 1 << 7,
-  TIME              = 1 << 8,
+  FUTEX             = 1 << 3,
+  GETTIMEOFDAY      = 1 << 4,
+  NANOSLEEP         = 1 << 5,
+  PSELECT           = 1 << 6,
+  SELECT            = 1 << 7,
+  SLEEP             = 1 << 8,
+  TIME              = 1 << 9,
 
-  LAST              = 1 << 9
+  LAST              = 1 << 10
 } hook_id;
 
 
@@ -177,6 +184,7 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
       HOOK("alarm", ALARM)
       else HOOK("clock_gettime", CLOCK_GETTIME)
       else HOOK("clock_nanosleep", CLOCK_NANOSLEEP)
+      else HOOK("futex", FUTEX)
       else HOOK("gettimeofday", GETTIMEOFDAY)
       else HOOK("nanosleep", NANOSLEEP)
       else HOOK("pselect", PSELECT)
@@ -200,6 +208,7 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
   timescaler_alarm           = dlsym(RTLD_NEXT, "alarm");
   timescaler_clock_gettime   = dlsym(RTLD_NEXT, "clock_gettime");
   timescaler_clock_nanosleep = dlsym(RTLD_NEXT, "clock_nanosleep");
+  timescaler_futex           = dlsym(RTLD_NEXT, "futex");
   timescaler_gettimeofday    = dlsym(RTLD_NEXT, "gettimeofday");
   timescaler_nanosleep       = dlsym(RTLD_NEXT, "nanosleep");
   timescaler_pselect         = dlsym(RTLD_NEXT, "pselect");
@@ -302,6 +311,29 @@ int clock_nanosleep(clockid_t clk_id, int flags,
 
   int return_value = timescaler_clock_nanosleep(clk_id, 0, &req_scale, remain);
   return return_value;
+}
+
+
+/**
+ * The futex function
+ */
+int futex(int *uaddr, int op, int val, const struct timespec *timeout,
+          int *uaddr2, int val3)
+{
+  PROLOGUE();
+
+  /* We only have to support the FUTEX_WAIT operation */
+  /* The other ones ignore the timeout argument */
+  if(unlikely(!is_hooked(FUTEX)) || op != FUTEX_WAIT)
+    return timescaler_futex(uaddr, op, val, timeout, uaddr2, val3);
+
+  struct timespec timeout_scale = { };
+
+  double time = (timeout->tv_sec + (double)timeout->tv_nsec / 1000000000L) * timescaler_scale;
+  timeout_scale.tv_sec = floor(time);
+  timeout_scale.tv_nsec = (time - timeout_scale.tv_sec) * 1000000000L;
+
+  return timescaler_futex(uaddr, op, val, &timeout_scale, uaddr2, val3);
 }
 
 
