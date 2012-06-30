@@ -283,26 +283,25 @@ int clock_nanosleep(clockid_t clk_id, int flags,
     return EINVAL;
   }
 
-  /* Wait for a time relative to the current time */
-  if(flags == 0)
-  {
-    /* TODO: check the return value for remaining time to sleep */
-    struct timespec req_scale = { };
+  /* Transform the time to a double */
+  double time = (req->tv_sec + (double)req->tv_nsec / 1000000000L);
 
-    double time = (req->tv_sec + (double)req->tv_nsec / 1000000000L) * timescaler_scale;
-    req_scale.tv_sec = floor(time);
-    req_scale.tv_nsec = (time - req_scale.tv_sec) * 1000000000L;
-
-    int return_value = timescaler_clock_nanosleep(clk_id, flags, &req_scale, remain);
-    return return_value;
-  }
-  /*  Wait until a certain point in the future */
-  else
+  /* Transform an absolute wait into a relative one */
+  if(flags == TIMER_ABSTIME)
   {
-    /* TODO: to implement */
-    timescaler_log(ERROR, "Waiting for an absolute time is not implemented in clock_nanosleep");
-    return EFAULT;
+    struct timespec req_now;
+    timescaler_clock_gettime(clk_id, &req_now);
+
+    time -= req_now.tv_sec + (double)req_now.tv_nsec / 1000000000L;
   }
+
+  /* TODO: check the return value for remaining time to sleep */
+  struct timespec req_scale = { };
+  req_scale.tv_sec = floor(time);
+  req_scale.tv_nsec = (time - req_scale.tv_sec) * 1000000000L;
+
+  int return_value = timescaler_clock_nanosleep(clk_id, 0, &req_scale, remain);
+  return return_value;
 }
 
 
