@@ -1,6 +1,7 @@
 #include <errno.h>
 #include <linux/futex.h>    /* futex */
 #include <math.h>
+#include <poll.h>           /* poll */
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -60,6 +61,8 @@ LOCAL int          (*timescaler_gettimeofday)(struct timeval *tv,
                                               struct timezone *tz) = NULL;
 LOCAL int          (*timescaler_nanosleep)(const struct timespec *req,
                                            struct timespec *rem) = NULL;
+LOCAL int          (*timescaler_poll)(struct pollfd *fds, nfds_t nfds,
+                                      int timeout) = NULL;
 LOCAL int          (*timescaler_pselect)(int nfds, fd_set *readfds,
                                          fd_set *writefds, fd_set *exceptfds,
                                          const struct timespec *timeout,
@@ -97,11 +100,12 @@ typedef enum
   GETTIMEOFDAY      = 1 << 4,
   NANOSLEEP         = 1 << 5,
   PSELECT           = 1 << 6,
-  SELECT            = 1 << 7,
-  SLEEP             = 1 << 8,
-  TIME              = 1 << 9,
+  POLL              = 1 << 7,
+  SELECT            = 1 << 8,
+  SLEEP             = 1 << 9,
+  TIME              = 1 << 10,
 
-  LAST              = 1 << 10
+  LAST              = 1 << 11
 } hook_id;
 
 
@@ -188,6 +192,7 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
       else HOOK("gettimeofday", GETTIMEOFDAY)
       else HOOK("nanosleep", NANOSLEEP)
       else HOOK("pselect", PSELECT)
+      else HOOK("poll", POLL)
       else HOOK("select", SELECT)
       else HOOK("sleep", SLEEP)
       else HOOK("time", TIME)
@@ -212,6 +217,7 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
   timescaler_gettimeofday    = dlsym(RTLD_NEXT, "gettimeofday");
   timescaler_nanosleep       = dlsym(RTLD_NEXT, "nanosleep");
   timescaler_pselect         = dlsym(RTLD_NEXT, "pselect");
+  timescaler_poll            = dlsym(RTLD_NEXT, "poll");
   timescaler_select          = dlsym(RTLD_NEXT, "select");
   timescaler_sleep           = dlsym(RTLD_NEXT, "sleep");
   timescaler_time            = dlsym(RTLD_NEXT, "time");
@@ -359,6 +365,19 @@ GLOBAL int gettimeofday(struct timeval *tv, struct timezone *tz)
 
 
 /**
+ * The poll function
+ */
+GLOBAL int poll(struct pollfd *fds, nfds_t nfds, int timeout)
+{
+  PROLOGUE();
+  if(unlikely(!is_hooked(POLL)))
+    return timescaler_poll(fds, nfds, timeout);
+
+  return timescaler_poll(fds, nfds, timeout * timescaler_scale);
+}
+
+
+/**
  * The sleep function
  */
 GLOBAL unsigned int sleep(unsigned int seconds)
@@ -371,6 +390,7 @@ GLOBAL unsigned int sleep(unsigned int seconds)
   unsigned int return_value = timescaler_sleep(seconds * timescaler_scale);
   return return_value / timescaler_scale;
 }
+
 
 /**
  * The nanosleep function
