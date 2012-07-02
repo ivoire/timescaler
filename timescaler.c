@@ -283,7 +283,7 @@ GLOBAL int clock_gettime(clockid_t clk_id, struct timespec *tp)
 }
 
 
-int clock_nanosleep(clockid_t clk_id, int flags,
+GLOBAL int clock_nanosleep(clockid_t clk_id, int flags,
                            const struct timespec *req,
                            struct timespec *remain)
 {
@@ -323,8 +323,8 @@ int clock_nanosleep(clockid_t clk_id, int flags,
 /**
  * The futex function
  */
-int futex(int *uaddr, int op, int val, const struct timespec *timeout,
-          int *uaddr2, int val3)
+GLOBAL int futex(int *uaddr, int op, int val, const struct timespec *timeout,
+                 int *uaddr2, int val3)
 {
   PROLOGUE();
 
