@@ -316,6 +316,8 @@ GLOBAL int clock_nanosleep(clockid_t clk_id, int flags,
     timescaler_clock_gettime(clk_id, &req_now);
 
     time -= req_now.tv_sec + (double)req_now.tv_nsec / 1000000000L;
+    if(time <= 0.0)
+      return 0;
   }
 
   /* TODO: check the return value for remaining time to sleep */
