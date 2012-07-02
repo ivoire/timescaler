@@ -41,7 +41,8 @@ LOCAL int   timescaler_initialized = 0;
 LOCAL int   timescaler_verbosity = 0;
 LOCAL float timescaler_scale = 1.0f;
 LOCAL int   timescaler_initial_time;
-LOCAL int   timescaler_initial_clock;
+LOCAL int   timescaler_initial_clock_monotonic;
+LOCAL int   timescaler_initial_clock_realtime;
 LOCAL int   timescaler_hooks;
 
 /**
@@ -229,7 +230,9 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
   {
     struct timespec tp;
     timescaler_clock_gettime(CLOCK_REALTIME, &tp);
-    timescaler_initial_clock = tp.tv_sec;
+    timescaler_initial_clock_realtime = tp.tv_sec;
+    timescaler_clock_gettime(CLOCK_MONOTONIC, &tp);
+    timescaler_initial_clock_monotonic = tp.tv_sec;
   }
 
   timescaler_log(DEBUG, "Timescaler initialization finished with:");
@@ -272,12 +275,17 @@ GLOBAL int clock_gettime(clockid_t clk_id, struct timespec *tp)
 
   int return_value = timescaler_clock_gettime(clk_id, tp);
 
+
+  double time;
   double now = (tp->tv_sec + (double)tp->tv_nsec / 1000000000L);
-  double time = timescaler_initial_clock + (now - timescaler_initial_clock) / timescaler_scale;
+
+  if(clk_id == CLOCK_REALTIME)
+    time = timescaler_initial_clock_realtime + (now - timescaler_initial_clock_realtime) / timescaler_scale;
+  else
+    time = timescaler_initial_clock_monotonic + (now - timescaler_initial_clock_monotonic) / timescaler_scale;
+
   tp->tv_sec = floor(time);
   tp->tv_nsec = (time - tp->tv_sec) * 1000000000L;
-
-  timescaler_log(DEBUG, "tv_sec=%d, tv_nsec=%d", tp->tv_sec, tp->tv_nsec);
 
   return return_value;
 }
@@ -355,7 +363,7 @@ GLOBAL int gettimeofday(struct timeval *tv, struct timezone *tz)
 
   int return_value = timescaler_gettimeofday(tv, tz);
   double now = (tv->tv_sec + (double)tv->tv_usec / 1000000L);
-  double time = timescaler_initial_clock + (now - timescaler_initial_time) / timescaler_scale;
+  double time = timescaler_initial_time + (now - timescaler_initial_time) / timescaler_scale;
 
   tv->tv_sec = floor(time);
   tv->tv_usec = (time - tv->tv_sec) * 1000000L;
