@@ -168,7 +168,7 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
   if(psz_scale)
     timescaler_scale = atof(psz_scale);
 
-  char *psz_hooks = getenv("TIMESCALER_HOOKS");
+  const char *psz_hooks = getenv("TIMESCALER_HOOKS");
   if(psz_hooks && !*psz_hooks)
   {
     timescaler_log(DEBUG, "Removing all hooks");
