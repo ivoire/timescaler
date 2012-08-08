@@ -177,11 +177,11 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
   else if(psz_hooks && *psz_hooks)
   {
     char *save_ptr, *token;
-    psz_hooks = strdup(psz_hooks);
+    char *psz_buffer = strdup(psz_hooks);
     timescaler_hooks = 0;
 
     /* Loop on every arguments seperated by ',' and match them with the hooks */
-    token = strtok_r(psz_hooks, ",", &save_ptr);
+    token = strtok_r(psz_buffer, ",", &save_ptr);
     timescaler_log(DEBUG, "List of hooks:");
     while(token)
     {
@@ -202,7 +202,7 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
 
       token = strtok_r(NULL, ",", &save_ptr);
     }
-    free(psz_hooks);
+    free(psz_buffer);
   }
   else
   {
