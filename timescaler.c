@@ -257,7 +257,6 @@ GLOBAL unsigned int alarm(unsigned int seconds)
 
 /**
  * The clock_gettime function
- * TODO: special care of the tp structure should be taken
  * TODO: more clk_id should be used
  */
 GLOBAL int clock_gettime(clockid_t clk_id, struct timespec *tp)
@@ -379,7 +378,6 @@ GLOBAL int gettimeofday(struct timeval *tv, struct timezone *tz)
 
 /**
  * The nanosleep function
- * TODO: Special care of the req and rem structures should eb taken
  */
 GLOBAL int nanosleep(const struct timespec *req, struct timespec *rem)
 {
@@ -395,6 +393,13 @@ GLOBAL int nanosleep(const struct timespec *req, struct timespec *rem)
   req_scale.tv_nsec = (time - req_scale.tv_sec) * 1000000000L;
 
   int return_value = timescaler_nanosleep(&req_scale, rem);
+
+  if(rem)
+  {
+    double rem_time = (rem->tv_sec + (double)rem->tv_nsec / 1000000000L) / timescaler_scale;
+    rem->tv_sec = floor(rem_time);
+    rem->tv_nsec = (rem_time - rem->tv_nsec) * 1000000000L;
+  }
 
   return return_value;
 }
