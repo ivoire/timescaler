@@ -242,18 +242,18 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
 
 
 /**
- * The time function
+ * The alarm function
  */
-GLOBAL time_t time(time_t* tp)
+GLOBAL unsigned int alarm(unsigned int seconds)
 {
   PROLOGUE();
 
-  if(unlikely(!is_hooked(TIME)))
-    return timescaler_time(tp);
+  if(unlikely(!is_hooked(ALARM)))
+    return timescaler_alarm(seconds);
 
-  time_t now = timescaler_time(tp);
-  return timescaler_initial_time + (now - timescaler_initial_time) / timescaler_scale;
+  return timescaler_alarm(seconds * timescaler_scale) / timescaler_scale;
 }
+
 
 /**
  * The clock_gettime function
@@ -291,6 +291,9 @@ GLOBAL int clock_gettime(clockid_t clk_id, struct timespec *tp)
 }
 
 
+/**
+ * The clock_nanosleep function
+ */
 GLOBAL int clock_nanosleep(clockid_t clk_id, int flags,
                            const struct timespec *req,
                            struct timespec *remain)
@@ -375,35 +378,6 @@ GLOBAL int gettimeofday(struct timeval *tv, struct timezone *tz)
 
 
 /**
- * The poll function
- */
-GLOBAL int poll(struct pollfd *fds, nfds_t nfds, int timeout)
-{
-  PROLOGUE();
-  if(unlikely(!is_hooked(POLL)))
-    return timescaler_poll(fds, nfds, timeout);
-
-  /* If the timeout is negative, no need to scale it */
-  return timescaler_poll(fds, nfds, timeout < 0 ? timeout : timeout * timescaler_scale);
-}
-
-
-/**
- * The sleep function
- */
-GLOBAL unsigned int sleep(unsigned int seconds)
-{
-  PROLOGUE();
-
-  if(unlikely(!is_hooked(SLEEP)))
-    return timescaler_sleep(seconds);
-
-  unsigned int return_value = timescaler_sleep(seconds * timescaler_scale);
-  return return_value / timescaler_scale;
-}
-
-
-/**
  * The nanosleep function
  * TODO: Special care of the req and rem structures should eb taken
  */
@@ -427,17 +401,37 @@ GLOBAL int nanosleep(const struct timespec *req, struct timespec *rem)
 
 
 /**
- * The alarm function
+ * The poll function
  */
-GLOBAL unsigned int alarm(unsigned int seconds)
+GLOBAL int poll(struct pollfd *fds, nfds_t nfds, int timeout)
+{
+  PROLOGUE();
+  if(unlikely(!is_hooked(POLL)))
+    return timescaler_poll(fds, nfds, timeout);
+
+  /* If the timeout is negative, no need to scale it */
+  return timescaler_poll(fds, nfds, timeout < 0 ? timeout : timeout * timescaler_scale);
+}
+
+
+/**
+ * The pselect function
+ * TODO: Special care of the tv structure should be taken
+ */
+int pselect(int nfds, fd_set *readfds, fd_set *writefds,
+            fd_set *exceptfds, const struct timespec *timeout,
+            const sigset_t *sigmask)
 {
   PROLOGUE();
 
-  if(unlikely(!is_hooked(ALARM)))
-    return timescaler_alarm(seconds);
+  if(unlikely(!is_hooked(PSELECT)))
+    return timescaler_pselect(nfds, readfds, writefds, exceptfds, timeout, sigmask);
 
-  return timescaler_alarm(seconds * timescaler_scale) / timescaler_scale;
+  struct timespec timeout_scale = { timeout->tv_sec * timescaler_scale, 0 };
+  return timescaler_pselect(nfds, readfds, writefds, exceptfds, &timeout_scale,
+                            sigmask);
 }
+
 
 /**
  * The select function
@@ -472,20 +466,32 @@ int select(int nfds, fd_set *readfds, fd_set *writefds,
   return return_value;
 }
 
+
 /**
- * The pselect fnction
- * TODO: Special care of the tv structure should be taken
+ * The sleep function
  */
-int pselect(int nfds, fd_set *readfds, fd_set *writefds,
-            fd_set *exceptfds, const struct timespec *timeout,
-            const sigset_t *sigmask)
+GLOBAL unsigned int sleep(unsigned int seconds)
 {
   PROLOGUE();
 
-  if(unlikely(!is_hooked(PSELECT)))
-    return timescaler_pselect(nfds, readfds, writefds, exceptfds, timeout, sigmask);
+  if(unlikely(!is_hooked(SLEEP)))
+    return timescaler_sleep(seconds);
 
-  struct timespec timeout_scale = { timeout->tv_sec * timescaler_scale, 0 };
-  return timescaler_pselect(nfds, readfds, writefds, exceptfds, &timeout_scale,
-                            sigmask);
+  unsigned int return_value = timescaler_sleep(seconds * timescaler_scale);
+  return return_value / timescaler_scale;
+}
+
+
+/**
+ * The time function
+ */
+GLOBAL time_t time(time_t* tp)
+{
+  PROLOGUE();
+
+  if(unlikely(!is_hooked(TIME)))
+    return timescaler_time(tp);
+
+  time_t now = timescaler_time(tp);
+  return timescaler_initial_time + (now - timescaler_initial_time) / timescaler_scale;
 }
