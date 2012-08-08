@@ -383,7 +383,8 @@ GLOBAL int poll(struct pollfd *fds, nfds_t nfds, int timeout)
   if(unlikely(!is_hooked(POLL)))
     return timescaler_poll(fds, nfds, timeout);
 
-  return timescaler_poll(fds, nfds, timeout * timescaler_scale);
+  /* If the timeout is negative, no need to scale it */
+  return timescaler_poll(fds, nfds, timeout < 0 ? timeout : timeout * timescaler_scale);
 }
 
 
