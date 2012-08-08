@@ -432,9 +432,15 @@ int pselect(int nfds, fd_set *readfds, fd_set *writefds,
   if(unlikely(!is_hooked(PSELECT)))
     return timescaler_pselect(nfds, readfds, writefds, exceptfds, timeout, sigmask);
 
-  struct timespec timeout_scale = { timeout->tv_sec * timescaler_scale, 0 };
-  return timescaler_pselect(nfds, readfds, writefds, exceptfds, &timeout_scale,
-                            sigmask);
+  /* The timeout can be NULL, which mean that pselect will wait forever */
+  if(timeout)
+  {
+    struct timespec timeout_scale = { timeout->tv_sec * timescaler_scale, 0 };
+    return timescaler_pselect(nfds, readfds, writefds, exceptfds, &timeout_scale,
+                              sigmask);
+  }
+  else
+    return timescaler_pselect(nfds, readfds, writefds, exceptfds, NULL, sigmask);
 }
 
 
