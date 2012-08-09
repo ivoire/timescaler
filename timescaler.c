@@ -394,7 +394,7 @@ GLOBAL int nanosleep(const struct timespec *req, struct timespec *rem)
 
   int return_value = timescaler_nanosleep(&req_scale, rem);
 
-  if(rem)
+  if(return_value != 0 && rem)
   {
     double rem_time = (rem->tv_sec + (double)rem->tv_nsec / 1000000000L) / timescaler_scale;
     rem->tv_sec = floor(rem_time);
