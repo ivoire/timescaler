@@ -421,7 +421,6 @@ GLOBAL int poll(struct pollfd *fds, nfds_t nfds, int timeout)
 
 /**
  * The pselect function
- * TODO: Special care of the tv structure should be taken
  */
 int pselect(int nfds, fd_set *readfds, fd_set *writefds,
             fd_set *exceptfds, const struct timespec *timeout,
@@ -435,7 +434,12 @@ int pselect(int nfds, fd_set *readfds, fd_set *writefds,
   /* The timeout can be NULL, which mean that pselect will wait forever */
   if(timeout)
   {
-    struct timespec timeout_scale = { timeout->tv_sec * timescaler_scale, 0 };
+    /* Scale the timeout */
+    double time = (timeout->tv_sec + (double)timeout->tv_nsec / 1000000000L) * timescaler_scale;
+    struct timespec timeout_scale;
+    timeout_scale.tv_sec = floor(time);
+    timeout_scale.tv_nsec = (time - timeout_scale.tv_sec) * 1000000000L;
+
     return timescaler_pselect(nfds, readfds, writefds, exceptfds, &timeout_scale,
                               sigmask);
   }
