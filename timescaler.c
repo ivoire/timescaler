@@ -446,7 +446,6 @@ int pselect(int nfds, fd_set *readfds, fd_set *writefds,
 
 /**
  * The select function
- * TODO: Special care of the tv structure should be taken
  */
 int select(int nfds, fd_set *readfds, fd_set *writefds,
            fd_set *exceptfds, struct timeval *timeout)
@@ -456,25 +455,28 @@ int select(int nfds, fd_set *readfds, fd_set *writefds,
   if(unlikely(!is_hooked(SELECT)))
     return timescaler_select(nfds, readfds, writefds, exceptfds, timeout);
 
-  /* Take into account the timeout can bu NULL */
-  int return_value;
+  /* The timeout can be NULL, which mean that pselect will wait forever */
   if(timeout)
   {
-    struct timeval timeout_scale = { timeout->tv_sec * timescaler_scale, 0 };
+    int return_value;
+    /* Scale the timeout */
+    double time = (timeout->tv_sec + (double)timeout->tv_usec / 1000000L) * timescaler_scale;
+    struct timeval timeout_scale;
+    timeout_scale.tv_sec = floor(time);
+    timeout_scale.tv_usec = (time - timeout_scale.tv_sec) * 1000000L;
+
+    /* Call the real function */
     return_value = timescaler_select(nfds, readfds, writefds, exceptfds, &timeout_scale);
 
-    if(timeout_scale.tv_sec != timeout->tv_sec * timescaler_scale)
-    {
-      timeout->tv_sec = timeout_scale.tv_sec / timescaler_scale;
-      timeout->tv_usec = 0;
-    }
+    /* Un-scale the returned timeout (remaining time) */
+    time = (timeout_scale.tv_sec + (double)timeout_scale.tv_usec / 1000000L) / timescaler_scale;
+    timeout->tv_sec = floor(time);
+    timeout->tv_usec = (time - timeout->tv_sec) * 1000000L;
+
+    return return_value;
   }
   else
-  {
-    return_value = timescaler_select(nfds, readfds, writefds, exceptfds, NULL);
-  }
-
-  return return_value;
+    return timescaler_select(nfds, readfds, writefds, exceptfds, NULL);
 }
 
 
