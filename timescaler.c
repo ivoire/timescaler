@@ -10,7 +10,7 @@
 #include <sys/select.h>
 #include <sys/time.h>
 #include <sys/times.h>      /* times, */
-#include <unistd.h>         /* usleep, */
+#include <unistd.h>         /* ualarm, usleep, */
 
 #define __USE_GNU
 #include <dlfcn.h>
@@ -76,6 +76,7 @@ LOCAL int          (*timescaler_select)(int nfds, fd_set *readfds,
 LOCAL unsigned int (*timescaler_sleep)(unsigned int) = NULL;
 LOCAL time_t       (*timescaler_time)(time_t*) = NULL;
 LOCAL clock_t      (*timescaler_times)(struct tms *) = NULL;
+LOCAL useconds_t   (*timescaler_ualarm)(useconds_t, useconds_t) = NULL;
 LOCAL int          (*timescaler_usleep)(useconds_t usec) = NULL;
 
 
@@ -110,9 +111,10 @@ typedef enum
   SLEEP             = 1 << 9,
   TIME              = 1 << 10,
   TIMES             = 1 << 11,
-  USLEEP            = 1 << 12,
+  UALARM            = 1 << 12,
+  USLEEP            = 1 << 13,
 
-  LAST              = 1 << 13
+  LAST              = 1 << 14
 } hook_id;
 
 
@@ -204,6 +206,7 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
       else HOOK("sleep", SLEEP)
       else HOOK("time", TIME)
       else HOOK("times", TIMES)
+      else HOOK("ualarm", UALARM)
       else HOOK("usleep", USLEEP)
       else timescaler_log(ERROR, "Unknwon hook: '%s'", token);
 #undef HOOK
@@ -231,6 +234,7 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
   timescaler_sleep           = dlsym(RTLD_NEXT, "sleep");
   timescaler_time            = dlsym(RTLD_NEXT, "time");
   timescaler_times           = dlsym(RTLD_NEXT, "times");
+  timescaler_ualarm          = dlsym(RTLD_NEXT, "ualarm");
   timescaler_usleep          = dlsym(RTLD_NEXT, "usleep");
 
   /* Get some time references */
@@ -547,6 +551,20 @@ clock_t times(struct tms *buf)
 
   // TODO: also change the return value
   return return_value;
+}
+
+
+/**
+ * The ualarm function
+ */
+useconds_t ualarm(useconds_t usecs, useconds_t interval)
+{
+  PROLOGUE();
+
+  if(unlikely(!is_hooked(UALARM)))
+    return timescaler_ualarm(usecs, interval);
+
+  return timescaler_ualarm(usecs * timescaler_scale, interval * timescaler_scale) / timescaler_scale;
 }
 
 
