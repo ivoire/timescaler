@@ -9,6 +9,7 @@
 #include <time.h>           /* alarm */
 #include <sys/select.h>
 #include <sys/time.h>
+#include <sys/times.h>      /* times, */
 #include <unistd.h>         /* usleep, */
 
 #define __USE_GNU
@@ -74,6 +75,7 @@ LOCAL int          (*timescaler_select)(int nfds, fd_set *readfds,
                                         struct timeval *timeout) = NULL;
 LOCAL unsigned int (*timescaler_sleep)(unsigned int) = NULL;
 LOCAL time_t       (*timescaler_time)(time_t*) = NULL;
+LOCAL clock_t      (*timescaler_times)(struct tms *) = NULL;
 LOCAL int          (*timescaler_usleep)(useconds_t usec) = NULL;
 
 
@@ -107,9 +109,10 @@ typedef enum
   SELECT            = 1 << 8,
   SLEEP             = 1 << 9,
   TIME              = 1 << 10,
-  USLEEP            = 1 << 11,
+  TIMES             = 1 << 11,
+  USLEEP            = 1 << 12,
 
-  LAST              = 1 << 12
+  LAST              = 1 << 13
 } hook_id;
 
 
@@ -200,6 +203,7 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
       else HOOK("select", SELECT)
       else HOOK("sleep", SLEEP)
       else HOOK("time", TIME)
+      else HOOK("times", TIMES)
       else HOOK("usleep", USLEEP)
       else timescaler_log(ERROR, "Unknwon hook: '%s'", token);
 #undef HOOK
@@ -226,6 +230,7 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
   timescaler_select          = dlsym(RTLD_NEXT, "select");
   timescaler_sleep           = dlsym(RTLD_NEXT, "sleep");
   timescaler_time            = dlsym(RTLD_NEXT, "time");
+  timescaler_times           = dlsym(RTLD_NEXT, "times");
   timescaler_usleep          = dlsym(RTLD_NEXT, "usleep");
 
   /* Get some time references */
@@ -519,6 +524,28 @@ GLOBAL time_t time(time_t* tp)
 
   if(tp)
     *tp = return_value;
+  return return_value;
+}
+
+
+/**
+ * The times function
+ */
+
+clock_t times(struct tms *buf)
+{
+  PROLOGUE();
+
+  if(unlikely(!is_hooked(TIMES)))
+    return timescaler_times(buf);
+
+  clock_t return_value = timescaler_times(buf);
+  buf->tms_utime = buf->tms_utime / timescaler_scale;
+  buf->tms_stime = buf->tms_stime / timescaler_scale;
+  buf->tms_cutime = buf->tms_cutime / timescaler_scale;
+  buf->tms_cstime = buf->tms_cstime / timescaler_scale;
+
+  // TODO: also change the return value
   return return_value;
 }
 
