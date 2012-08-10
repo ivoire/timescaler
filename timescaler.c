@@ -510,5 +510,5 @@ GLOBAL time_t time(time_t* tp)
     return timescaler_time(tp);
 
   time_t now = timescaler_time(tp);
-  return timescaler_initial_time + (now - timescaler_initial_time) / timescaler_scale;
+  return timescaler_initial_time + (double)(now - timescaler_initial_time) / timescaler_scale;
 }
