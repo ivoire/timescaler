@@ -9,6 +9,7 @@
 #include <time.h>           /* alarm */
 #include <sys/select.h>
 #include <sys/time.h>
+#include <unistd.h>         /* usleep, */
 
 #define __USE_GNU
 #include <dlfcn.h>
@@ -73,6 +74,7 @@ LOCAL int          (*timescaler_select)(int nfds, fd_set *readfds,
                                         struct timeval *timeout) = NULL;
 LOCAL unsigned int (*timescaler_sleep)(unsigned int) = NULL;
 LOCAL time_t       (*timescaler_time)(time_t*) = NULL;
+LOCAL int          (*timescaler_usleep)(useconds_t usec) = NULL;
 
 
 /**
@@ -105,8 +107,9 @@ typedef enum
   SELECT            = 1 << 8,
   SLEEP             = 1 << 9,
   TIME              = 1 << 10,
+  USLEEP            = 1 << 11,
 
-  LAST              = 1 << 11
+  LAST              = 1 << 12
 } hook_id;
 
 
@@ -197,6 +200,7 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
       else HOOK("select", SELECT)
       else HOOK("sleep", SLEEP)
       else HOOK("time", TIME)
+      else HOOK("usleep", USLEEP)
       else timescaler_log(ERROR, "Unknwon hook: '%s'", token);
 #undef HOOK
 
@@ -222,6 +226,7 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
   timescaler_select          = dlsym(RTLD_NEXT, "select");
   timescaler_sleep           = dlsym(RTLD_NEXT, "sleep");
   timescaler_time            = dlsym(RTLD_NEXT, "time");
+  timescaler_usleep          = dlsym(RTLD_NEXT, "usleep");
 
   /* Get some time references */
   timescaler_initial_time = timescaler_time(NULL);
@@ -515,4 +520,18 @@ GLOBAL time_t time(time_t* tp)
   if(tp)
     *tp = return_value;
   return return_value;
+}
+
+
+/**
+ * The usleep function
+ */
+int usleep(useconds_t usec)
+{
+  PROLOGUE();
+
+  if(unlikely(!is_hooked(USLEEP)))
+    return timescaler_usleep(usec);
+
+  return timescaler_usleep(usec * timescaler_scale);
 }
