@@ -509,6 +509,10 @@ GLOBAL time_t time(time_t* tp)
   if(unlikely(!is_hooked(TIME)))
     return timescaler_time(tp);
 
-  time_t now = timescaler_time(tp);
-  return timescaler_initial_time + (double)(now - timescaler_initial_time) / timescaler_scale;
+  time_t now = timescaler_time(NULL);
+  time_t return_value = timescaler_initial_time + (double)(now - timescaler_initial_time) / timescaler_scale;
+
+  if(tp)
+    *tp = return_value;
+  return return_value;
 }
