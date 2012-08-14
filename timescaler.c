@@ -26,7 +26,7 @@
 #include <time.h>           /* alarm */
 #include <sys/select.h>
 #include <sys/time.h>
-#include <sys/times.h>      /* setitimer, times, */
+#include <sys/times.h>      /* getitimer, setitimer, times, */
 #include <unistd.h>         /* ualarm, usleep, */
 
 #define __USE_GNU
@@ -76,6 +76,7 @@ LOCAL int          (*timescaler_clock_nanosleep)(clockid_t, int,
 LOCAL int          (*timescaler_futex)(int *, int, int,
                                        const struct timespec *,
                                        int *, int) = NULL;
+LOCAL int          (*timescaler_getitimer)(int, struct itimerval *) = NULL;
 LOCAL int          (*timescaler_gettimeofday)(struct timeval *,
                                               struct timezone *) = NULL;
 LOCAL int          (*timescaler_nanosleep)(const struct timespec *,
@@ -118,19 +119,20 @@ typedef enum
   CLOCK_GETTIME     = 1 << 1,
   CLOCK_NANOSLEEP   = 1 << 2,
   FUTEX             = 1 << 3,
-  GETTIMEOFDAY      = 1 << 4,
-  NANOSLEEP         = 1 << 5,
-  PSELECT           = 1 << 6,
-  POLL              = 1 << 7,
-  SELECT            = 1 << 8,
-  SETITIMER         = 1 << 9,
-  SLEEP             = 1 << 10,
-  TIME              = 1 << 11,
-  TIMES             = 1 << 12,
-  UALARM            = 1 << 13,
-  USLEEP            = 1 << 14,
+  GETITIMER         = 1 << 4,
+  GETTIMEOFDAY      = 1 << 5,
+  NANOSLEEP         = 1 << 6,
+  PSELECT           = 1 << 7,
+  POLL              = 1 << 8,
+  SELECT            = 1 << 9,
+  SETITIMER         = 1 << 10,
+  SLEEP             = 1 << 11,
+  TIME              = 1 << 12,
+  TIMES             = 1 << 13,
+  UALARM            = 1 << 14,
+  USLEEP            = 1 << 15,
 
-  LAST              = 1 << 15
+  LAST              = 1 << 16
 } hook_id;
 
 
@@ -214,6 +216,7 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
       else HOOK("clock_gettime", CLOCK_GETTIME)
       else HOOK("clock_nanosleep", CLOCK_NANOSLEEP)
       else HOOK("futex", FUTEX)
+      else HOOK("getitimer", GETITIMER)
       else HOOK("gettimeofday", GETTIMEOFDAY)
       else HOOK("nanosleep", NANOSLEEP)
       else HOOK("pselect", PSELECT)
@@ -243,6 +246,7 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
   timescaler_clock_gettime   = dlsym(RTLD_NEXT, "clock_gettime");
   timescaler_clock_nanosleep = dlsym(RTLD_NEXT, "clock_nanosleep");
   timescaler_futex           = dlsym(RTLD_NEXT, "futex");
+  timescaler_getitimer       = dlsym(RTLD_NEXT, "getitimer");
   timescaler_gettimeofday    = dlsym(RTLD_NEXT, "gettimeofday");
   timescaler_nanosleep       = dlsym(RTLD_NEXT, "nanosleep");
   timescaler_pselect         = dlsym(RTLD_NEXT, "pselect");
@@ -384,6 +388,29 @@ GLOBAL int futex(int *uaddr, int op, int val, const struct timespec *timeout,
   timeout_scale.tv_nsec = (time - timeout_scale.tv_sec) * 1000000000L;
 
   return timescaler_futex(uaddr, op, val, &timeout_scale, uaddr2, val3);
+}
+
+/**
+ * The getitimer function
+ */
+GLOBAL int getitimer(int which, struct itimerval *curr_value)
+{
+  PROLOGUE();
+
+  if(unlikely(!is_hooked(GETITIMER)))
+    return timescaler_getitimer(which, curr_value);
+
+  int return_value = timescaler_getitimer(which, curr_value);
+  double value = (curr_value->it_value.tv_sec + (double)(curr_value->it_value.tv_usec) / 1000000L) / timescaler_scale;
+  double interval = (curr_value->it_interval.tv_sec + (double)(curr_value->it_interval.tv_usec) / 1000000L) / timescaler_scale;
+
+  curr_value->it_value.tv_sec = floor(value);
+  curr_value->it_interval.tv_sec = floor(interval);
+
+  curr_value->it_value.tv_usec = (value - curr_value->it_value.tv_sec) * 1000000L;
+  curr_value->it_interval.tv_usec = (value - curr_value->it_interval.tv_sec) * 1000000L;
+
+  return return_value;
 }
 
 
