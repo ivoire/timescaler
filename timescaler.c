@@ -67,35 +67,32 @@ LOCAL int   timescaler_hooks;
 /**
  * Global function pointers
  */
-LOCAL unsigned int (*timescaler_alarm)(unsigned int seconds) = NULL;
+LOCAL unsigned int (*timescaler_alarm)(unsigned int) = NULL;
 LOCAL int          (*timescaler_clock_gettime)(clockid_t, struct timespec *) = NULL;
-LOCAL int          (*timescaler_clock_nanosleep)(clockid_t clock_id, int flags,
-                                                 const struct timespec *request,
-                                                 struct timespec *remain) = NULL;
+LOCAL int          (*timescaler_clock_nanosleep)(clockid_t, int,
+                                                 const struct timespec *,
+                                                 struct timespec *) = NULL;
 
-LOCAL int           (*timescaler_futex)(int *uaddr, int op, int val,
-                                        const struct timespec *timeout,
-                                        int *uaddr2, int val3) = NULL;
-LOCAL int          (*timescaler_gettimeofday)(struct timeval *tv,
-                                              struct timezone *tz) = NULL;
-LOCAL int          (*timescaler_nanosleep)(const struct timespec *req,
-                                           struct timespec *rem) = NULL;
-LOCAL int          (*timescaler_poll)(struct pollfd *fds, nfds_t nfds,
-                                      int timeout) = NULL;
-LOCAL int          (*timescaler_pselect)(int nfds, fd_set *readfds,
-                                         fd_set *writefds, fd_set *exceptfds,
-                                         const struct timespec *timeout,
-                                         const sigset_t *sigmask) = NULL;
-LOCAL int          (*timescaler_select)(int nfds, fd_set *readfds,
-                                        fd_set *writefds, fd_set *exceptfds,
-                                        struct timeval *timeout) = NULL;
+LOCAL int          (*timescaler_futex)(int *, int, int,
+                                       const struct timespec *,
+                                       int *, int) = NULL;
+LOCAL int          (*timescaler_gettimeofday)(struct timeval *,
+                                              struct timezone *) = NULL;
+LOCAL int          (*timescaler_nanosleep)(const struct timespec *,
+                                           struct timespec *) = NULL;
+LOCAL int          (*timescaler_poll)(struct pollfd *, nfds_t, int) = NULL;
+LOCAL int          (*timescaler_pselect)(int nfds, fd_set *, fd_set *,
+                                         fd_set *, const struct timespec *,
+                                         const sigset_t *) = NULL;
+LOCAL int          (*timescaler_select)(int nfds, fd_set *, fd_set *, fd_set *,
+                                        struct timeval *) = NULL;
 LOCAL int          (*timescaler_setitimer)(int, const struct itimerval *,
                                            struct itimerval *) = NULL;
 LOCAL unsigned int (*timescaler_sleep)(unsigned int) = NULL;
 LOCAL time_t       (*timescaler_time)(time_t*) = NULL;
 LOCAL clock_t      (*timescaler_times)(struct tms *) = NULL;
 LOCAL useconds_t   (*timescaler_ualarm)(useconds_t, useconds_t) = NULL;
-LOCAL int          (*timescaler_usleep)(useconds_t usec) = NULL;
+LOCAL int          (*timescaler_usleep)(useconds_t) = NULL;
 
 
 /**
