@@ -26,7 +26,7 @@
 #include <time.h>           /* alarm */
 #include <sys/select.h>
 #include <sys/time.h>
-#include <sys/times.h>      /* times, */
+#include <sys/times.h>      /* setitimer, times, */
 #include <unistd.h>         /* ualarm, usleep, */
 
 #define __USE_GNU
@@ -76,7 +76,6 @@ LOCAL int          (*timescaler_clock_nanosleep)(clockid_t clock_id, int flags,
 LOCAL int           (*timescaler_futex)(int *uaddr, int op, int val,
                                         const struct timespec *timeout,
                                         int *uaddr2, int val3) = NULL;
-
 LOCAL int          (*timescaler_gettimeofday)(struct timeval *tv,
                                               struct timezone *tz) = NULL;
 LOCAL int          (*timescaler_nanosleep)(const struct timespec *req,
@@ -90,6 +89,8 @@ LOCAL int          (*timescaler_pselect)(int nfds, fd_set *readfds,
 LOCAL int          (*timescaler_select)(int nfds, fd_set *readfds,
                                         fd_set *writefds, fd_set *exceptfds,
                                         struct timeval *timeout) = NULL;
+LOCAL int          (*timescaler_setitimer)(int, const struct itimerval *,
+                                           struct itimerval *) = NULL;
 LOCAL unsigned int (*timescaler_sleep)(unsigned int) = NULL;
 LOCAL time_t       (*timescaler_time)(time_t*) = NULL;
 LOCAL clock_t      (*timescaler_times)(struct tms *) = NULL;
@@ -125,13 +126,14 @@ typedef enum
   PSELECT           = 1 << 6,
   POLL              = 1 << 7,
   SELECT            = 1 << 8,
-  SLEEP             = 1 << 9,
-  TIME              = 1 << 10,
-  TIMES             = 1 << 11,
-  UALARM            = 1 << 12,
-  USLEEP            = 1 << 13,
+  SETITIMER         = 1 << 9,
+  SLEEP             = 1 << 10,
+  TIME              = 1 << 11,
+  TIMES             = 1 << 12,
+  UALARM            = 1 << 13,
+  USLEEP            = 1 << 14,
 
-  LAST              = 1 << 14
+  LAST              = 1 << 15
 } hook_id;
 
 
@@ -220,6 +222,7 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
       else HOOK("pselect", PSELECT)
       else HOOK("poll", POLL)
       else HOOK("select", SELECT)
+      else HOOK("setitimer", SETITIMER)
       else HOOK("sleep", SLEEP)
       else HOOK("time", TIME)
       else HOOK("times", TIMES)
@@ -248,6 +251,7 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
   timescaler_pselect         = dlsym(RTLD_NEXT, "pselect");
   timescaler_poll            = dlsym(RTLD_NEXT, "poll");
   timescaler_select          = dlsym(RTLD_NEXT, "select");
+  timescaler_setitimer       = dlsym(RTLD_NEXT, "setitimer");
   timescaler_sleep           = dlsym(RTLD_NEXT, "sleep");
   timescaler_time            = dlsym(RTLD_NEXT, "time");
   timescaler_times           = dlsym(RTLD_NEXT, "times");
@@ -514,6 +518,44 @@ int select(int nfds, fd_set *readfds, fd_set *writefds,
     return timescaler_select(nfds, readfds, writefds, exceptfds, NULL);
 }
 
+
+/**
+ * The setitimer function
+ */
+GLOBAL int setitimer(int which, const struct itimerval *new_value,
+                     struct itimerval *old_value)
+{
+  PROLOGUE();
+
+  if(unlikely(!is_hooked(SETITIMER)))
+    return timescaler_setitimer(which, new_value, old_value);
+
+  struct itimerval new_value_scale;
+  double value = (new_value->it_value.tv_sec + (double)(new_value->it_value.tv_usec) / 1000000L) * timescaler_scale;
+  double interval = (new_value->it_interval.tv_sec + (double)(new_value->it_interval.tv_usec) / 1000000L) * timescaler_scale;
+  new_value_scale.it_value.tv_sec = floor(value);
+  new_value_scale.it_interval.tv_sec = floor(interval);
+
+  new_value_scale.it_value.tv_usec = (value - new_value_scale.it_value.tv_sec) * 1000000L;
+  new_value_scale.it_interval.tv_usec = (interval - new_value_scale.it_interval.tv_sec) * 1000000L;
+
+  int return_value = timescaler_setitimer(which, &new_value_scale, old_value);
+
+  // Change the old_value if not NULL
+  if(old_value)
+  {
+    value = (old_value->it_value.tv_sec + (double)(old_value->it_value.tv_usec) / 1000000L) / timescaler_scale;
+    interval = (old_value->it_interval.tv_sec + (double)(old_value->it_interval.tv_usec) / 1000000L) / timescaler_scale;
+
+    old_value->it_value.tv_sec = floor(value);
+    old_value->it_interval.tv_sec = floor(interval);
+
+    old_value->it_value.tv_usec = (value - old_value->it_value.tv_sec) * 1000000L;
+    old_value->it_interval.tv_usec = (interval - old_value->it_interval.tv_usec) * 1000000L;
+  }
+
+  return return_value;
+}
 
 /**
  * The sleep function
