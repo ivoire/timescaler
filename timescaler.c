@@ -53,6 +53,11 @@
 #endif
 
 
+/** Current version */
+#define TIMESCALER_VERSION_MAJOR 0
+#define TIMESCALER_VERSION_MINOR 1
+
+
 /**
  * Global configuration variables
  */
@@ -271,7 +276,7 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
     timescaler_initial_clock_monotonic = tp.tv_sec;
   }
 
-  timescaler_log(DEBUG, "Timescaler initialization finished with:");
+  timescaler_log(DEBUG, "Timescaler v%d.%d initialization finished with:", TIMESCALER_VERSION_MAJOR, TIMESCALER_VERSION_MINOR);
   timescaler_log(DEBUG, " * verbosity=%d", timescaler_verbosity);
   timescaler_log(DEBUG, " * scale=%f", timescaler_scale);
 }
