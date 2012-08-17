@@ -283,6 +283,18 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
 
 
 /**
+ * Transform a double into a timespec structure
+ * @param d: the time as a double
+ * @param t: the timespec structure
+ */
+static inline void double2timespec(double time, struct timespec *t)
+{
+  t->tv_sec = floor(time);
+  t->tv_nsec = (time - t->tv_sec) * 1000000000L;
+}
+
+
+/**
  * The alarm function
  */
 GLOBAL unsigned int alarm(unsigned int seconds)
@@ -324,8 +336,7 @@ GLOBAL int clock_gettime(clockid_t clk_id, struct timespec *tp)
   else
     time = timescaler_initial_clock_monotonic + (now - timescaler_initial_clock_monotonic) / timescaler_scale;
 
-  tp->tv_sec = floor(time);
-  tp->tv_nsec = (time - tp->tv_sec) * 1000000000L;
+  double2timespec(time, tp);
 
   return return_value;
 }
@@ -364,9 +375,8 @@ GLOBAL int clock_nanosleep(clockid_t clk_id, int flags,
   }
 
   /* TODO: check the return value for remaining time to sleep */
-  struct timespec req_scale = { };
-  req_scale.tv_sec = floor(time);
-  req_scale.tv_nsec = (time - req_scale.tv_sec) * 1000000000L;
+  struct timespec req_scale;
+  double2timespec(time, &req_scale);
 
   int return_value = timescaler_clock_nanosleep(clk_id, 0, &req_scale, remain);
   return return_value;
@@ -386,11 +396,9 @@ GLOBAL int futex(int *uaddr, int op, int val, const struct timespec *timeout,
   if(unlikely(!is_hooked(FUTEX)) || op != FUTEX_WAIT)
     return timescaler_futex(uaddr, op, val, timeout, uaddr2, val3);
 
-  struct timespec timeout_scale = { };
-
+  struct timespec timeout_scale;
   double time = (timeout->tv_sec + (double)timeout->tv_nsec / 1000000000L) * timescaler_scale;
-  timeout_scale.tv_sec = floor(time);
-  timeout_scale.tv_nsec = (time - timeout_scale.tv_sec) * 1000000000L;
+  double2timespec(time, &timeout_scale);
 
   return timescaler_futex(uaddr, op, val, &timeout_scale, uaddr2, val3);
 }
@@ -450,19 +458,16 @@ GLOBAL int nanosleep(const struct timespec *req, struct timespec *rem)
   if(unlikely(!is_hooked(NANOSLEEP)))
     return timescaler_nanosleep(req, rem);
 
-  struct timespec req_scale = { };
-
+  struct timespec req_scale;
   double time = (req->tv_sec + (double)req->tv_nsec / 1000000000L) * timescaler_scale;
-  req_scale.tv_sec = floor(time);
-  req_scale.tv_nsec = (time - req_scale.tv_sec) * 1000000000L;
+  double2timespec(time, &req_scale);
 
   int return_value = timescaler_nanosleep(&req_scale, rem);
 
   if(return_value != 0 && rem)
   {
     double rem_time = (rem->tv_sec + (double)rem->tv_nsec / 1000000000L) / timescaler_scale;
-    rem->tv_sec = floor(rem_time);
-    rem->tv_nsec = (rem_time - rem->tv_sec) * 1000000000L;
+    double2timespec(rem_time, rem);
   }
 
   return return_value;
@@ -501,8 +506,7 @@ int pselect(int nfds, fd_set *readfds, fd_set *writefds,
     /* Scale the timeout */
     double time = (timeout->tv_sec + (double)timeout->tv_nsec / 1000000000L) * timescaler_scale;
     struct timespec timeout_scale;
-    timeout_scale.tv_sec = floor(time);
-    timeout_scale.tv_nsec = (time - timeout_scale.tv_sec) * 1000000000L;
+    double2timespec(time, &timeout_scale);
 
     return timescaler_pselect(nfds, readfds, writefds, exceptfds, &timeout_scale,
                               sigmask);
