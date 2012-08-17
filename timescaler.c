@@ -284,13 +284,25 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
 
 /**
  * Transform a double into a timespec structure
- * @param d: the time as a double
+ * @param time: the time as a double
  * @param t: the timespec structure
  */
 static inline void double2timespec(double time, struct timespec *t)
 {
   t->tv_sec = floor(time);
   t->tv_nsec = (time - t->tv_sec) * 1000000000L;
+}
+
+
+/**
+ * Transform a double into a timeval structure
+ * @param time: the time as a double
+ * @param t: the timeval structure
+ */
+static inline void double2timeval(double time, struct timeval *t)
+{
+  t->tv_sec = floor(time);
+  t->tv_usec = (time - t->tv_sec) * 1000000L;
 }
 
 
@@ -417,11 +429,8 @@ GLOBAL int getitimer(int which, struct itimerval *curr_value)
   double value = (curr_value->it_value.tv_sec + (double)(curr_value->it_value.tv_usec) / 1000000L) / timescaler_scale;
   double interval = (curr_value->it_interval.tv_sec + (double)(curr_value->it_interval.tv_usec) / 1000000L) / timescaler_scale;
 
-  curr_value->it_value.tv_sec = floor(value);
-  curr_value->it_interval.tv_sec = floor(interval);
-
-  curr_value->it_value.tv_usec = (value - curr_value->it_value.tv_sec) * 1000000L;
-  curr_value->it_interval.tv_usec = (value - curr_value->it_interval.tv_sec) * 1000000L;
+  double2timeval(value, &(curr_value->it_value));
+  double2timeval(interval, &(curr_value->it_interval));
 
   return return_value;
 }
@@ -441,8 +450,7 @@ GLOBAL int gettimeofday(struct timeval *tv, struct timezone *tz)
   double now = (tv->tv_sec + (double)tv->tv_usec / 1000000L);
   double time = timescaler_initial_time + (now - timescaler_initial_time) / timescaler_scale;
 
-  tv->tv_sec = floor(time);
-  tv->tv_usec = (time - tv->tv_sec) * 1000000L;
+  double2timeval(time, tv);
 
   return return_value;
 }
@@ -534,16 +542,14 @@ int select(int nfds, fd_set *readfds, fd_set *writefds,
     /* Scale the timeout */
     double time = (timeout->tv_sec + (double)timeout->tv_usec / 1000000L) * timescaler_scale;
     struct timeval timeout_scale;
-    timeout_scale.tv_sec = floor(time);
-    timeout_scale.tv_usec = (time - timeout_scale.tv_sec) * 1000000L;
+    double2timeval(time, &timeout_scale);
 
     /* Call the real function */
     return_value = timescaler_select(nfds, readfds, writefds, exceptfds, &timeout_scale);
 
     /* Un-scale the returned timeout (remaining time) */
     time = (timeout_scale.tv_sec + (double)timeout_scale.tv_usec / 1000000L) / timescaler_scale;
-    timeout->tv_sec = floor(time);
-    timeout->tv_usec = (time - timeout->tv_sec) * 1000000L;
+    double2timeval(time, timeout);
 
     return return_value;
   }
@@ -566,11 +572,8 @@ GLOBAL int setitimer(int which, const struct itimerval *new_value,
   struct itimerval new_value_scale;
   double value = (new_value->it_value.tv_sec + (double)(new_value->it_value.tv_usec) / 1000000L) * timescaler_scale;
   double interval = (new_value->it_interval.tv_sec + (double)(new_value->it_interval.tv_usec) / 1000000L) * timescaler_scale;
-  new_value_scale.it_value.tv_sec = floor(value);
-  new_value_scale.it_interval.tv_sec = floor(interval);
-
-  new_value_scale.it_value.tv_usec = (value - new_value_scale.it_value.tv_sec) * 1000000L;
-  new_value_scale.it_interval.tv_usec = (interval - new_value_scale.it_interval.tv_sec) * 1000000L;
+  double2timeval(value, &(new_value_scale.it_value));
+  double2timeval(interval, &(new_value_scale.it_interval));
 
   int return_value = timescaler_setitimer(which, &new_value_scale, old_value);
 
@@ -580,11 +583,8 @@ GLOBAL int setitimer(int which, const struct itimerval *new_value,
     value = (old_value->it_value.tv_sec + (double)(old_value->it_value.tv_usec) / 1000000L) / timescaler_scale;
     interval = (old_value->it_interval.tv_sec + (double)(old_value->it_interval.tv_usec) / 1000000L) / timescaler_scale;
 
-    old_value->it_value.tv_sec = floor(value);
-    old_value->it_interval.tv_sec = floor(interval);
-
-    old_value->it_value.tv_usec = (value - old_value->it_value.tv_sec) * 1000000L;
-    old_value->it_interval.tv_usec = (interval - old_value->it_interval.tv_usec) * 1000000L;
+    double2timeval(value, &(old_value->it_value));
+    double2timeval(interval, &(old_value->it_interval));
   }
 
   return return_value;
