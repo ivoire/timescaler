@@ -295,6 +295,17 @@ static inline void double2timespec(double time, struct timespec *t)
 
 
 /**
+ * Transform a timespec structure to a double
+ * @param t: the timespec structure
+ * @return the time as a double
+ */
+static inline double timespec2double(const struct timespec *t)
+{
+  return t->tv_sec + (double)t->tv_nsec / 1000000000L;
+}
+
+
+/**
  * Transform a double into a timeval structure
  * @param time: the time as a double
  * @param t: the timeval structure
@@ -303,6 +314,17 @@ static inline void double2timeval(double time, struct timeval *t)
 {
   t->tv_sec = floor(time);
   t->tv_usec = (time - t->tv_sec) * 1000000L;
+}
+
+
+/**
+ * Transform a timeval structure to a double
+ * @param t: the timeval structure
+ * @return the time as a double
+ */
+static inline double timeval2double(const struct timeval *t)
+{
+  return t->tv_sec + (double)t->tv_usec / 1000000L;
 }
 
 
@@ -341,7 +363,7 @@ GLOBAL int clock_gettime(clockid_t clk_id, struct timespec *tp)
 
 
   double time;
-  double now = (tp->tv_sec + (double)tp->tv_nsec / 1000000000L);
+  double now = timespec2double(tp);
 
   if(clk_id == CLOCK_REALTIME)
     time = timescaler_initial_clock_realtime + (now - timescaler_initial_clock_realtime) / timescaler_scale;
@@ -373,7 +395,7 @@ GLOBAL int clock_nanosleep(clockid_t clk_id, int flags,
   }
 
   /* Transform the time to a double */
-  double time = (req->tv_sec + (double)req->tv_nsec / 1000000000L);
+  double time = timespec2double(req);
 
   /* Transform an absolute wait into a relative one */
   if(flags == TIMER_ABSTIME)
@@ -381,7 +403,7 @@ GLOBAL int clock_nanosleep(clockid_t clk_id, int flags,
     struct timespec req_now;
     timescaler_clock_gettime(clk_id, &req_now);
 
-    time -= req_now.tv_sec + (double)req_now.tv_nsec / 1000000000L;
+    time -= timespec2double(&req_now);
     if(time <= 0.0)
       return 0;
   }
@@ -409,7 +431,7 @@ GLOBAL int futex(int *uaddr, int op, int val, const struct timespec *timeout,
     return timescaler_futex(uaddr, op, val, timeout, uaddr2, val3);
 
   struct timespec timeout_scale;
-  double time = (timeout->tv_sec + (double)timeout->tv_nsec / 1000000000L) * timescaler_scale;
+  double time = timespec2double(timeout) * timescaler_scale;
   double2timespec(time, &timeout_scale);
 
   return timescaler_futex(uaddr, op, val, &timeout_scale, uaddr2, val3);
@@ -426,8 +448,8 @@ GLOBAL int getitimer(int which, struct itimerval *curr_value)
     return timescaler_getitimer(which, curr_value);
 
   int return_value = timescaler_getitimer(which, curr_value);
-  double value = (curr_value->it_value.tv_sec + (double)(curr_value->it_value.tv_usec) / 1000000L) / timescaler_scale;
-  double interval = (curr_value->it_interval.tv_sec + (double)(curr_value->it_interval.tv_usec) / 1000000L) / timescaler_scale;
+  double value = timeval2double(&curr_value->it_value) / timescaler_scale;
+  double interval = timeval2double(&curr_value->it_interval) / timescaler_scale;
 
   double2timeval(value, &(curr_value->it_value));
   double2timeval(interval, &(curr_value->it_interval));
@@ -447,7 +469,7 @@ GLOBAL int gettimeofday(struct timeval *tv, struct timezone *tz)
     return timescaler_gettimeofday(tv, tz);
 
   int return_value = timescaler_gettimeofday(tv, tz);
-  double now = (tv->tv_sec + (double)tv->tv_usec / 1000000L);
+  double now = timeval2double(tv);
   double time = timescaler_initial_time + (now - timescaler_initial_time) / timescaler_scale;
 
   double2timeval(time, tv);
@@ -467,14 +489,14 @@ GLOBAL int nanosleep(const struct timespec *req, struct timespec *rem)
     return timescaler_nanosleep(req, rem);
 
   struct timespec req_scale;
-  double time = (req->tv_sec + (double)req->tv_nsec / 1000000000L) * timescaler_scale;
+  double time = timespec2double(req) * timescaler_scale;
   double2timespec(time, &req_scale);
 
   int return_value = timescaler_nanosleep(&req_scale, rem);
 
   if(return_value != 0 && rem)
   {
-    double rem_time = (rem->tv_sec + (double)rem->tv_nsec / 1000000000L) / timescaler_scale;
+    double rem_time = timespec2double(rem) / timescaler_scale;
     double2timespec(rem_time, rem);
   }
 
@@ -512,7 +534,7 @@ int pselect(int nfds, fd_set *readfds, fd_set *writefds,
   if(timeout)
   {
     /* Scale the timeout */
-    double time = (timeout->tv_sec + (double)timeout->tv_nsec / 1000000000L) * timescaler_scale;
+    double time = timespec2double(timeout) * timescaler_scale;
     struct timespec timeout_scale;
     double2timespec(time, &timeout_scale);
 
@@ -540,7 +562,7 @@ int select(int nfds, fd_set *readfds, fd_set *writefds,
   {
     int return_value;
     /* Scale the timeout */
-    double time = (timeout->tv_sec + (double)timeout->tv_usec / 1000000L) * timescaler_scale;
+    double time = timeval2double(timeout) * timescaler_scale;
     struct timeval timeout_scale;
     double2timeval(time, &timeout_scale);
 
@@ -548,7 +570,7 @@ int select(int nfds, fd_set *readfds, fd_set *writefds,
     return_value = timescaler_select(nfds, readfds, writefds, exceptfds, &timeout_scale);
 
     /* Un-scale the returned timeout (remaining time) */
-    time = (timeout_scale.tv_sec + (double)timeout_scale.tv_usec / 1000000L) / timescaler_scale;
+    time = timeval2double(&timeout_scale) / timescaler_scale;
     double2timeval(time, timeout);
 
     return return_value;
@@ -570,8 +592,8 @@ GLOBAL int setitimer(int which, const struct itimerval *new_value,
     return timescaler_setitimer(which, new_value, old_value);
 
   struct itimerval new_value_scale;
-  double value = (new_value->it_value.tv_sec + (double)(new_value->it_value.tv_usec) / 1000000L) * timescaler_scale;
-  double interval = (new_value->it_interval.tv_sec + (double)(new_value->it_interval.tv_usec) / 1000000L) * timescaler_scale;
+  double value = timeval2double(&new_value->it_value) * timescaler_scale;
+  double interval = timeval2double(&new_value->it_interval) * timescaler_scale;
   double2timeval(value, &(new_value_scale.it_value));
   double2timeval(interval, &(new_value_scale.it_interval));
 
@@ -580,8 +602,8 @@ GLOBAL int setitimer(int which, const struct itimerval *new_value,
   // Change the old_value if not NULL
   if(old_value)
   {
-    value = (old_value->it_value.tv_sec + (double)(old_value->it_value.tv_usec) / 1000000L) / timescaler_scale;
-    interval = (old_value->it_interval.tv_sec + (double)(old_value->it_interval.tv_usec) / 1000000L) / timescaler_scale;
+    value = timeval2double(&old_value->it_value) / timescaler_scale;
+    interval = timeval2double(&old_value->it_interval) / timescaler_scale;
 
     double2timeval(value, &(old_value->it_value));
     double2timeval(interval, &(old_value->it_interval));
