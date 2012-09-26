@@ -6,8 +6,6 @@ CFLAGS  = -Wall -O2
 LDFLAGS = -ldl -lrt -lm -fPIC
 
 
-all: timescaler.so
-
 timescaler.so: timescaler.c Makefile
 	$(CC) $(CFLAGS) timescaler.c -o timescaler.so -shared $(LDFLAGS)
 
