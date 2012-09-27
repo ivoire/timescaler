@@ -32,6 +32,7 @@
 #define __USE_GNU
 #include <dlfcn.h>
 
+
 /**
  * Hide most symboles by default and export only the hooks
  */
@@ -42,6 +43,7 @@
 # define GLOBAL
 # define LOCAL
 #endif
+
 
 /**
  * The unlikely hint for the compiler as initialized check are unlikely to fail
@@ -59,19 +61,21 @@
 
 
 /**
- * Structure to select the hooks to put in place
+ * Global configuration
  */
-typedef struct config_s {
+LOCAL struct {
   int initialized;
   int verbosity;
   float scale;
 
+  // Initial value for some functions
   struct {
     int time;
     int clock_monotonic;
     int clock_realtime;
   } initial;
 
+  // List of hooks in place
   struct {
     int alarm:1;
     int clock_gettime:1;
@@ -91,6 +95,7 @@ typedef struct config_s {
     int usleep:1;
   } hooks;
 
+  // Pointer to the original functions
   struct {
     unsigned int  (*alarm)(unsigned int);
     int           (*clock_gettime)(clockid_t, struct timespec *);
@@ -113,14 +118,9 @@ typedef struct config_s {
     int           (*usleep)(useconds_t);
   } funcs;
 
-} config_s;
-
-/**
- * Global configuration variables
- */
-LOCAL config_s ts_config = { .initialized = 0,
-                             .verbosity = 1,
-                             .scale = 1.0f };
+} ts_config = { .initialized = 0,
+                .verbosity = 1,
+                .scale = 1.0f };
 
 
 /**
@@ -146,6 +146,7 @@ static const char *psz_log_level[] =
   if(unlikely(!ts_config.initialized))              \
     timescaler_init();                              \
   timescaler_log(DEBUG, "Calling '%s'", __func__);
+
 
 /**
  * Logging function for the timescaler library
