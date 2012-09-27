@@ -61,47 +61,6 @@
 /**
  * Structure to select the hooks to put in place
  */
-typedef struct hooks_s {
-  int alarm:1;
-  int clock_gettime:1;
-  int clock_nanosleep:1;
-  int futex:1;
-  int getitimer:1;
-  int gettimeofday:1;
-  int nanosleep:1;
-  int pselect:1;
-  int poll:1;
-  int select:1;
-  int setitimer:1;
-  int sleep:1;
-  int time:1;
-  int times:1;
-  int ualarm:1;
-  int usleep:1;
-} hooks_s;
-
-typedef struct funcs_s {
-  unsigned int  (*alarm)(unsigned int);
-  int           (*clock_gettime)(clockid_t, struct timespec *);
-  int           (*clock_nanosleep)(clockid_t, int, const struct timespec *,
-                                   struct timespec *);
-  int           (*futex)(int *, int, int, const struct timespec *, int *, int);
-  int           (*getitimer)(int, struct itimerval *);
-  int           (*gettimeofday)(struct timeval *, struct timezone *);
-  int           (*nanosleep)(const struct timespec *, struct timespec *);
-  int           (*poll)(struct pollfd *, nfds_t, int);
-  int           (*pselect)(int nfds, fd_set *, fd_set *, fd_set *,
-                           const struct timespec *, const sigset_t *);
-  int           (*select)(int nfds, fd_set *, fd_set *, fd_set *,
-                          struct timeval *);
-  int           (*setitimer)(int, const struct itimerval *, struct itimerval *);
-  unsigned int  (*sleep)(unsigned int);
-  time_t        (*time)(time_t*);
-  clock_t       (*times)(struct tms *);
-  useconds_t    (*ualarm)(useconds_t, useconds_t);
-  int           (*usleep)(useconds_t);
-} funcs_s;
-
 typedef struct config_s {
   int initialized;
   int verbosity;
@@ -113,8 +72,47 @@ typedef struct config_s {
     int clock_realtime;
   } initial;
 
-  hooks_s hooks;
-  funcs_s funcs;
+  struct {
+    int alarm:1;
+    int clock_gettime:1;
+    int clock_nanosleep:1;
+    int futex:1;
+    int getitimer:1;
+    int gettimeofday:1;
+    int nanosleep:1;
+    int pselect:1;
+    int poll:1;
+    int select:1;
+    int setitimer:1;
+    int sleep:1;
+    int time:1;
+    int times:1;
+    int ualarm:1;
+    int usleep:1;
+  } hooks;
+
+  struct {
+    unsigned int  (*alarm)(unsigned int);
+    int           (*clock_gettime)(clockid_t, struct timespec *);
+    int           (*clock_nanosleep)(clockid_t, int, const struct timespec *,
+                                     struct timespec *);
+    int           (*futex)(int *, int, int, const struct timespec *, int *, int);
+    int           (*getitimer)(int, struct itimerval *);
+    int           (*gettimeofday)(struct timeval *, struct timezone *);
+    int           (*nanosleep)(const struct timespec *, struct timespec *);
+    int           (*poll)(struct pollfd *, nfds_t, int);
+    int           (*pselect)(int nfds, fd_set *, fd_set *, fd_set *,
+                             const struct timespec *, const sigset_t *);
+    int           (*select)(int nfds, fd_set *, fd_set *, fd_set *,
+                            struct timeval *);
+    int           (*setitimer)(int, const struct itimerval *, struct itimerval *);
+    unsigned int  (*sleep)(unsigned int);
+    time_t        (*time)(time_t*);
+    clock_t       (*times)(struct tms *);
+    useconds_t    (*ualarm)(useconds_t, useconds_t);
+    int           (*usleep)(useconds_t);
+  } funcs;
+
 } config_s;
 
 /**
