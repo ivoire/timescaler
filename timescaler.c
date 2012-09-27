@@ -141,29 +141,6 @@ static const char *psz_log_level[] =
   "DEBUG"
 };
 
-typedef enum
-{
-  ALARM             = 1 << 0,
-  CLOCK_GETTIME     = 1 << 1,
-  CLOCK_NANOSLEEP   = 1 << 2,
-  FUTEX             = 1 << 3,
-  GETITIMER         = 1 << 4,
-  GETTIMEOFDAY      = 1 << 5,
-  NANOSLEEP         = 1 << 6,
-  PSELECT           = 1 << 7,
-  POLL              = 1 << 8,
-  SELECT            = 1 << 9,
-  SETITIMER         = 1 << 10,
-  SLEEP             = 1 << 11,
-  TIME              = 1 << 12,
-  TIMES             = 1 << 13,
-  UALARM            = 1 << 14,
-  USLEEP            = 1 << 15,
-
-  LAST              = 1 << 16
-} hook_id;
-
-
 #define IS_HOOKED(func) (timescaler_hooks.func)
 
 #define PROLOGUE()                                  \
