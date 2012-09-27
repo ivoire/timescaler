@@ -240,7 +240,7 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
   else
   {
     timescaler_log(DEBUG, "Hooking every implemented symbols");
-    memset(&timescaler_hooks, 1, sizeof(timescaler_hooks));
+    memset(&timescaler_hooks, -1, sizeof(hooks_s));
   }
 
   /* Resolv the symboles that we will need afterward */
