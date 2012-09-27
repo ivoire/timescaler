@@ -154,7 +154,7 @@ static const char *psz_log_level[] =
  * @param psz_fmt: the message to print
  * @return nothing
  */
-static inline void timescaler_log(log_level level, const char *psz_fmt, ...)
+LOCAL inline void timescaler_log(log_level level, const char *psz_fmt, ...)
 {
   if(unlikely(level <= ts_config.verbosity))
   {
@@ -284,7 +284,7 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
  * @param time: the time as a double
  * @param t: the timespec structure
  */
-static inline void double2timespec(double time, struct timespec *t)
+LOCAL inline void double2timespec(double time, struct timespec *t)
 {
   t->tv_sec = floor(time);
   t->tv_nsec = (time - t->tv_sec) * 1000000000L;
@@ -296,7 +296,7 @@ static inline void double2timespec(double time, struct timespec *t)
  * @param t: the timespec structure
  * @return the time as a double
  */
-static inline double timespec2double(const struct timespec *t)
+LOCAL inline double timespec2double(const struct timespec *t)
 {
   return t->tv_sec + (double)t->tv_nsec / 1000000000L;
 }
@@ -307,7 +307,7 @@ static inline double timespec2double(const struct timespec *t)
  * @param time: the time as a double
  * @param t: the timeval structure
  */
-static inline void double2timeval(double time, struct timeval *t)
+LOCAL inline void double2timeval(double time, struct timeval *t)
 {
   t->tv_sec = floor(time);
   t->tv_usec = (time - t->tv_sec) * 1000000L;
@@ -319,7 +319,7 @@ static inline void double2timeval(double time, struct timeval *t)
  * @param t: the timeval structure
  * @return the time as a double
  */
-static inline double timeval2double(const struct timeval *t)
+LOCAL inline double timeval2double(const struct timeval *t)
 {
   return t->tv_sec + (double)t->tv_usec / 1000000L;
 }
