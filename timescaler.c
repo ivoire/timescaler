@@ -73,6 +73,7 @@ LOCAL struct {
     int time;
     int clock_monotonic;
     int clock_realtime;
+    clock_t times;
   } initial;
 
   // List of hooks in place
@@ -243,7 +244,7 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
     memset(&ts_config.hooks, -1, sizeof(ts_config.hooks));
   }
 
-  /* Resolv the symboles that we will need afterward */
+  /* Resolve the symbols that we will need afterward */
   ts_config.funcs.alarm           = dlsym(RTLD_NEXT, "alarm");
   ts_config.funcs.clock_gettime   = dlsym(RTLD_NEXT, "clock_gettime");
   ts_config.funcs.clock_nanosleep = dlsym(RTLD_NEXT, "clock_nanosleep");
@@ -272,7 +273,10 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
     ts_config.funcs.clock_gettime(CLOCK_MONOTONIC, &tp);
     ts_config.initial.clock_monotonic = tp.tv_sec;
   }
+  struct tms dummy;
+  ts_config.initial.times = ts_config.funcs.times(&dummy);
 
+  /* Print some informations about the configuration */
   timescaler_log(DEBUG, "Timescaler v%d.%d initialization finished with:", TIMESCALER_VERSION_MAJOR, TIMESCALER_VERSION_MINOR);
   timescaler_log(DEBUG, " * verbosity=%d", ts_config.verbosity);
   timescaler_log(DEBUG, " * scale=%f", ts_config.scale);
@@ -667,8 +671,10 @@ clock_t times(struct tms *buf)
   buf->tms_cutime = buf->tms_cutime / ts_config.scale;
   buf->tms_cstime = buf->tms_cstime / ts_config.scale;
 
-  // TODO: also change the return value
-  return return_value;
+  if(return_value == (clock_t)-1)
+    return return_value;
+  else
+    return ts_config.initial.times + (return_value - ts_config.initial.times) / ts_config.scale;
 }
 
 
