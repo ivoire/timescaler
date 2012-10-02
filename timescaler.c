@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <string.h>         /* memset, strstr */
 #include <time.h>           /* alarm */
+#include <sys/epoll.h>      /* epoll_pwait, epoll_wait */
 #include <sys/select.h>
 #include <sys/time.h>
 #include <sys/times.h>      /* getitimer, setitimer, times, */
@@ -81,6 +82,8 @@ LOCAL struct {
     int alarm:1;
     int clock_gettime:1;
     int clock_nanosleep:1;
+    int epoll_pwait:1;
+    int epoll_wait:1;
     int futex:1;
     int getitimer:1;
     int gettimeofday:1;
@@ -102,6 +105,10 @@ LOCAL struct {
     int           (*clock_gettime)(clockid_t, struct timespec *);
     int           (*clock_nanosleep)(clockid_t, int, const struct timespec *,
                                      struct timespec *);
+
+    int           (*epoll_pwait)(int, struct epoll_event *, int, int,
+                                 const __sigset_t *);
+    int           (*epoll_wait)(int, struct epoll_event *, int, int);
     int           (*futex)(int *, int, int, const struct timespec *, int *, int);
     int           (*getitimer)(int, struct itimerval *);
     int           (*gettimeofday)(struct timeval *, struct timezone *);
@@ -218,6 +225,8 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
       HOOK(alarm)
       else HOOK(clock_gettime)
       else HOOK(clock_nanosleep)
+      else HOOK(epoll_pwait)
+      else HOOK(epoll_wait)
       else HOOK(futex)
       else HOOK(getitimer)
       else HOOK(gettimeofday)
@@ -248,6 +257,8 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
   ts_config.funcs.alarm           = dlsym(RTLD_NEXT, "alarm");
   ts_config.funcs.clock_gettime   = dlsym(RTLD_NEXT, "clock_gettime");
   ts_config.funcs.clock_nanosleep = dlsym(RTLD_NEXT, "clock_nanosleep");
+  ts_config.funcs.epoll_pwait     = dlsym(RTLD_NEXT, "epoll_pwait");
+  ts_config.funcs.epoll_wait      = dlsym(RTLD_NEXT, "epoll_wait");
   ts_config.funcs.futex           = dlsym(RTLD_NEXT, "futex");
   ts_config.funcs.getitimer       = dlsym(RTLD_NEXT, "getitimer");
   ts_config.funcs.gettimeofday    = dlsym(RTLD_NEXT, "gettimeofday");
@@ -415,6 +426,43 @@ GLOBAL int clock_nanosleep(clockid_t clk_id, int flags,
 
   int return_value = ts_config.funcs.clock_nanosleep(clk_id, 0, &req_scale, remain);
   return return_value;
+}
+
+
+/**
+ * The epoll_pwait function
+ */
+GLOBAL int epoll_pwait(int epfd, struct epoll_event *events, int maxevents,
+                       int timeout, const sigset_t *sigmask)
+{
+  PROLOGUE();
+
+  /* No need to scale if if the timeout is 0 (return immediately) or -1
+     (infinite) */
+  if(unlikely(!IS_HOOKED(epoll_pwait) || timeout <= 0))
+    return ts_config.funcs.epoll_pwait(epfd, events, maxevents, timeout,
+                                       sigmask);
+
+  return ts_config.funcs.epoll_pwait(epfd, events, maxevents,
+                                     timeout * ts_config.scale, sigmask);
+}
+
+
+/**
+ * The epoll_wait function
+ */
+GLOBAL int epoll_wait(int epfd, struct epoll_event *events, int maxevents,
+                      int timeout)
+{
+  PROLOGUE();
+
+  /* No need to scale if if the timeout is 0 (return immediately) or -1
+     (infinite) */
+  if(unlikely(!IS_HOOKED(epoll_wait) || timeout <= 0))
+    return ts_config.funcs.epoll_wait(epfd, events, maxevents, timeout);
+
+  return ts_config.funcs.epoll_wait(epfd, events, maxevents,
+                                    timeout * ts_config.scale);
 }
 
 
