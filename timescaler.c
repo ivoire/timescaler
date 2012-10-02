@@ -17,21 +17,21 @@
 
 #include <errno.h>
 #include <linux/futex.h>    /* futex */
-#include <math.h>
+#include <math.h>           /* floor */
 #include <poll.h>           /* poll */
-#include <stdarg.h>
-#include <stdlib.h>
-#include <stdio.h>
+#include <stdarg.h>         /* va_list, va_args */
+#include <stdlib.h>         /* atof, atoi, getenv, free */
+#include <stdio.h>          /* fprintf, stderr, vfprintf */
 #include <string.h>         /* memset, strstr */
-#include <time.h>           /* alarm */
 #include <sys/epoll.h>      /* epoll_pwait, epoll_wait */
-#include <sys/select.h>
-#include <sys/time.h>
-#include <sys/times.h>      /* getitimer, setitimer, times, */
-#include <unistd.h>         /* ualarm, usleep, */
+#include <sys/select.h>     /* pselect, select */
+#include <sys/time.h>       /* getitimer, gettimeofday, setitimer */
+#include <sys/times.h>      /* times */
+#include <time.h>           /* clock_gettime, clock_nanosleep, nanosleep, time */
+#include <unistd.h>         /* alarm, sleep, ualarm, usleep */
 
 #define __USE_GNU
-#include <dlfcn.h>
+#include <dlfcn.h>          /* dlsym */
 
 
 /**
