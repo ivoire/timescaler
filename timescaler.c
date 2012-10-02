@@ -254,24 +254,26 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
   }
 
   /* Resolve the symbols that we will need afterward */
-  ts_config.funcs.alarm           = dlsym(RTLD_NEXT, "alarm");
-  ts_config.funcs.clock_gettime   = dlsym(RTLD_NEXT, "clock_gettime");
-  ts_config.funcs.clock_nanosleep = dlsym(RTLD_NEXT, "clock_nanosleep");
-  ts_config.funcs.epoll_pwait     = dlsym(RTLD_NEXT, "epoll_pwait");
-  ts_config.funcs.epoll_wait      = dlsym(RTLD_NEXT, "epoll_wait");
-  ts_config.funcs.futex           = dlsym(RTLD_NEXT, "futex");
-  ts_config.funcs.getitimer       = dlsym(RTLD_NEXT, "getitimer");
-  ts_config.funcs.gettimeofday    = dlsym(RTLD_NEXT, "gettimeofday");
-  ts_config.funcs.nanosleep       = dlsym(RTLD_NEXT, "nanosleep");
-  ts_config.funcs.pselect         = dlsym(RTLD_NEXT, "pselect");
-  ts_config.funcs.poll            = dlsym(RTLD_NEXT, "poll");
-  ts_config.funcs.select          = dlsym(RTLD_NEXT, "select");
-  ts_config.funcs.setitimer       = dlsym(RTLD_NEXT, "setitimer");
-  ts_config.funcs.sleep           = dlsym(RTLD_NEXT, "sleep");
-  ts_config.funcs.time            = dlsym(RTLD_NEXT, "time");
-  ts_config.funcs.times           = dlsym(RTLD_NEXT, "times");
-  ts_config.funcs.ualarm          = dlsym(RTLD_NEXT, "ualarm");
-  ts_config.funcs.usleep          = dlsym(RTLD_NEXT, "usleep");
+#define HOOK(name) ts_config.funcs.name = dlsym(RTLD_NEXT, #name)
+  HOOK(alarm);
+  HOOK(clock_gettime);
+  HOOK(clock_nanosleep);
+  HOOK(epoll_pwait);
+  HOOK(epoll_wait);
+  HOOK(futex);
+  HOOK(getitimer);
+  HOOK(gettimeofday);
+  HOOK(nanosleep);
+  HOOK(pselect);
+  HOOK(poll);
+  HOOK(select);
+  HOOK(setitimer);
+  HOOK(sleep);
+  HOOK(time);
+  HOOK(times);
+  HOOK(ualarm);
+  HOOK(usleep);
+#undef HOOK
 
   /* Get some time references */
   ts_config.initial.time = ts_config.funcs.time(NULL);
