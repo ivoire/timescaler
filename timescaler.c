@@ -17,20 +17,22 @@
 
 #include <errno.h>
 #include <linux/futex.h>    /* futex */
-#include <math.h>
+#include <math.h>           /* floor */
 #include <poll.h>           /* poll */
-#include <stdarg.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>         /* strstr */
-#include <time.h>           /* alarm */
-#include <sys/select.h>
-#include <sys/time.h>
-#include <sys/times.h>      /* getitimer, setitimer, times, */
-#include <unistd.h>         /* ualarm, usleep, */
+#include <stdarg.h>         /* va_list, va_args */
+#include <stdlib.h>         /* atof, atoi, getenv, free */
+#include <stdio.h>          /* fprintf, stderr, vfprintf */
+#include <string.h>         /* memset, strstr */
+#include <sys/epoll.h>      /* epoll_pwait, epoll_wait */
+#include <sys/select.h>     /* pselect, select */
+#include <sys/time.h>       /* getitimer, gettimeofday, setitimer */
+#include <sys/times.h>      /* times */
+#include <time.h>           /* clock_gettime, clock_nanosleep, nanosleep, time */
+#include <unistd.h>         /* alarm, sleep, ualarm, usleep */
 
 #define __USE_GNU
-#include <dlfcn.h>
+#include <dlfcn.h>          /* dlsym */
+
 
 /**
  * Hide most symboles by default and export only the hooks
@@ -42,6 +44,7 @@
 # define GLOBAL
 # define LOCAL
 #endif
+
 
 /**
  * The unlikely hint for the compiler as initialized check are unlikely to fail
@@ -55,50 +58,77 @@
 
 /** Current version */
 #define TIMESCALER_VERSION_MAJOR 0
-#define TIMESCALER_VERSION_MINOR 1
+#define TIMESCALER_VERSION_MINOR 2
 
 
 /**
- * Global configuration variables
+ * Global configuration
  */
-LOCAL int   timescaler_initialized = 0;
-LOCAL int   timescaler_verbosity = 0;
-LOCAL float timescaler_scale = 1.0f;
-LOCAL int   timescaler_initial_time;
-LOCAL int   timescaler_initial_clock_monotonic;
-LOCAL int   timescaler_initial_clock_realtime;
-LOCAL int   timescaler_hooks;
+LOCAL struct {
+  int initialized;
+  int verbosity;
+  float scale;
 
-/**
- * Global function pointers
- */
-LOCAL unsigned int (*timescaler_alarm)(unsigned int) = NULL;
-LOCAL int          (*timescaler_clock_gettime)(clockid_t, struct timespec *) = NULL;
-LOCAL int          (*timescaler_clock_nanosleep)(clockid_t, int,
-                                                 const struct timespec *,
-                                                 struct timespec *) = NULL;
+  // Initial value for some functions
+  struct {
+    int time;
+    int clock_monotonic;
+    int clock_realtime;
+    clock_t times;
+  } initial;
 
-LOCAL int          (*timescaler_futex)(int *, int, int,
-                                       const struct timespec *,
-                                       int *, int) = NULL;
-LOCAL int          (*timescaler_getitimer)(int, struct itimerval *) = NULL;
-LOCAL int          (*timescaler_gettimeofday)(struct timeval *,
-                                              struct timezone *) = NULL;
-LOCAL int          (*timescaler_nanosleep)(const struct timespec *,
-                                           struct timespec *) = NULL;
-LOCAL int          (*timescaler_poll)(struct pollfd *, nfds_t, int) = NULL;
-LOCAL int          (*timescaler_pselect)(int nfds, fd_set *, fd_set *,
-                                         fd_set *, const struct timespec *,
-                                         const sigset_t *) = NULL;
-LOCAL int          (*timescaler_select)(int nfds, fd_set *, fd_set *, fd_set *,
-                                        struct timeval *) = NULL;
-LOCAL int          (*timescaler_setitimer)(int, const struct itimerval *,
-                                           struct itimerval *) = NULL;
-LOCAL unsigned int (*timescaler_sleep)(unsigned int) = NULL;
-LOCAL time_t       (*timescaler_time)(time_t*) = NULL;
-LOCAL clock_t      (*timescaler_times)(struct tms *) = NULL;
-LOCAL useconds_t   (*timescaler_ualarm)(useconds_t, useconds_t) = NULL;
-LOCAL int          (*timescaler_usleep)(useconds_t) = NULL;
+  // List of hooks in place
+  struct {
+    int alarm:1;
+    int clock_gettime:1;
+    int clock_nanosleep:1;
+    int epoll_pwait:1;
+    int epoll_wait:1;
+    int futex:1;
+    int getitimer:1;
+    int gettimeofday:1;
+    int nanosleep:1;
+    int pselect:1;
+    int poll:1;
+    int select:1;
+    int setitimer:1;
+    int sleep:1;
+    int time:1;
+    int times:1;
+    int ualarm:1;
+    int usleep:1;
+  } hooks;
+
+  // Pointer to the original functions
+  struct {
+    unsigned int  (*alarm)(unsigned int);
+    int           (*clock_gettime)(clockid_t, struct timespec *);
+    int           (*clock_nanosleep)(clockid_t, int, const struct timespec *,
+                                     struct timespec *);
+
+    int           (*epoll_pwait)(int, struct epoll_event *, int, int,
+                                 const __sigset_t *);
+    int           (*epoll_wait)(int, struct epoll_event *, int, int);
+    int           (*futex)(int *, int, int, const struct timespec *, int *, int);
+    int           (*getitimer)(int, struct itimerval *);
+    int           (*gettimeofday)(struct timeval *, struct timezone *);
+    int           (*nanosleep)(const struct timespec *, struct timespec *);
+    int           (*poll)(struct pollfd *, nfds_t, int);
+    int           (*pselect)(int nfds, fd_set *, fd_set *, fd_set *,
+                             const struct timespec *, const sigset_t *);
+    int           (*select)(int nfds, fd_set *, fd_set *, fd_set *,
+                            struct timeval *);
+    int           (*setitimer)(int, const struct itimerval *, struct itimerval *);
+    unsigned int  (*sleep)(unsigned int);
+    time_t        (*time)(time_t*);
+    clock_t       (*times)(struct tms *);
+    useconds_t    (*ualarm)(useconds_t, useconds_t);
+    int           (*usleep)(useconds_t);
+  } funcs;
+
+} ts_config = { .initialized = 0,
+                .verbosity = 1,
+                .scale = 1.0f };
 
 
 /**
@@ -118,38 +148,13 @@ static const char *psz_log_level[] =
   "DEBUG"
 };
 
-typedef enum
-{
-  ALARM             = 1 << 0,
-  CLOCK_GETTIME     = 1 << 1,
-  CLOCK_NANOSLEEP   = 1 << 2,
-  FUTEX             = 1 << 3,
-  GETITIMER         = 1 << 4,
-  GETTIMEOFDAY      = 1 << 5,
-  NANOSLEEP         = 1 << 6,
-  PSELECT           = 1 << 7,
-  POLL              = 1 << 8,
-  SELECT            = 1 << 9,
-  SETITIMER         = 1 << 10,
-  SLEEP             = 1 << 11,
-  TIME              = 1 << 12,
-  TIMES             = 1 << 13,
-  UALARM            = 1 << 14,
-  USLEEP            = 1 << 15,
-
-  LAST              = 1 << 16
-} hook_id;
-
-
-static inline int is_hooked(hook_id id)
-{
-  return (timescaler_hooks & id) != 0;
-}
+#define IS_HOOKED(func) (ts_config.hooks.func)
 
 #define PROLOGUE()                                  \
-  if(unlikely(!timescaler_initialized))             \
+  if(unlikely(!ts_config.initialized))              \
     timescaler_init();                              \
-  timescaler_log(DEBUG, "Calling '%s", __func__);
+  timescaler_log(DEBUG, "Calling '%s'", __func__);
+
 
 /**
  * Logging function for the timescaler library
@@ -157,9 +162,9 @@ static inline int is_hooked(hook_id id)
  * @param psz_fmt: the message to print
  * @return nothing
  */
-static inline void timescaler_log(log_level level, const char *psz_fmt, ...)
+LOCAL inline void timescaler_log(log_level level, const char *psz_fmt, ...)
 {
-  if(unlikely(level <= timescaler_verbosity))
+  if(unlikely(level <= ts_config.verbosity))
   {
     if(level > 3) level = 3;
 
@@ -186,53 +191,55 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
     In this case the hook should call the constructor and then continue to
     execute the right code.
   */
-  if(timescaler_initialized)
+  if(ts_config.initialized)
     return;
-  timescaler_initialized = 1;
+  ts_config.initialized = 1;
 
   /* Fetch the configuration from the environment variables */
   const char *psz_verbosity = getenv("TIMESCALER_VERBOSITY");
   if(psz_verbosity)
-    timescaler_verbosity = atoi(psz_verbosity);
+    ts_config.verbosity = atoi(psz_verbosity);
 
   const char *psz_scale = getenv("TIMESCALER_SCALE");
   if(psz_scale)
-    timescaler_scale = atof(psz_scale);
+    ts_config.scale = atof(psz_scale);
 
   const char *psz_hooks = getenv("TIMESCALER_HOOKS");
   if(psz_hooks && !*psz_hooks)
   {
     timescaler_log(DEBUG, "Removing all hooks");
-    timescaler_hooks = 0;
+    memset(&ts_config.hooks, 0, sizeof(ts_config.hooks));
   }
   else if(psz_hooks && *psz_hooks)
   {
     char *save_ptr, *token;
     char *psz_buffer = strdup(psz_hooks);
-    timescaler_hooks = 0;
+    memset(&ts_config.hooks, 0, sizeof(ts_config.hooks));
 
     /* Loop on every arguments seperated by ',' and match them with the hooks */
     token = strtok_r(psz_buffer, ",", &save_ptr);
     timescaler_log(DEBUG, "List of hooks:");
     while(token)
     {
-#define HOOK(psz, value) if(!strcmp(token, psz)) { timescaler_hooks |= value; timescaler_log(DEBUG, " * %s", psz); }
-      HOOK("alarm", ALARM)
-      else HOOK("clock_gettime", CLOCK_GETTIME)
-      else HOOK("clock_nanosleep", CLOCK_NANOSLEEP)
-      else HOOK("futex", FUTEX)
-      else HOOK("getitimer", GETITIMER)
-      else HOOK("gettimeofday", GETTIMEOFDAY)
-      else HOOK("nanosleep", NANOSLEEP)
-      else HOOK("pselect", PSELECT)
-      else HOOK("poll", POLL)
-      else HOOK("select", SELECT)
-      else HOOK("setitimer", SETITIMER)
-      else HOOK("sleep", SLEEP)
-      else HOOK("time", TIME)
-      else HOOK("times", TIMES)
-      else HOOK("ualarm", UALARM)
-      else HOOK("usleep", USLEEP)
+#define HOOK(func) if(!strcmp(token, #func)) { ts_config.hooks.func = 1; timescaler_log(DEBUG, " * %s", #func); }
+      HOOK(alarm)
+      else HOOK(clock_gettime)
+      else HOOK(clock_nanosleep)
+      else HOOK(epoll_pwait)
+      else HOOK(epoll_wait)
+      else HOOK(futex)
+      else HOOK(getitimer)
+      else HOOK(gettimeofday)
+      else HOOK(nanosleep)
+      else HOOK(pselect)
+      else HOOK(poll)
+      else HOOK(select)
+      else HOOK(setitimer)
+      else HOOK(sleep)
+      else HOOK(time)
+      else HOOK(times)
+      else HOOK(ualarm)
+      else HOOK(usleep)
       else timescaler_log(ERROR, "Unknwon hook: '%s'", token);
 #undef HOOK
 
@@ -243,42 +250,95 @@ LOCAL void __attribute__ ((constructor)) timescaler_init(void)
   else
   {
     timescaler_log(DEBUG, "Hooking every implemented symbols");
-    timescaler_hooks = LAST - 1;
+    memset(&ts_config.hooks, -1, sizeof(ts_config.hooks));
   }
 
-  /* Resolv the symboles that we will need afterward */
-  timescaler_alarm           = dlsym(RTLD_NEXT, "alarm");
-  timescaler_clock_gettime   = dlsym(RTLD_NEXT, "clock_gettime");
-  timescaler_clock_nanosleep = dlsym(RTLD_NEXT, "clock_nanosleep");
-  timescaler_futex           = dlsym(RTLD_NEXT, "futex");
-  timescaler_getitimer       = dlsym(RTLD_NEXT, "getitimer");
-  timescaler_gettimeofday    = dlsym(RTLD_NEXT, "gettimeofday");
-  timescaler_nanosleep       = dlsym(RTLD_NEXT, "nanosleep");
-  timescaler_pselect         = dlsym(RTLD_NEXT, "pselect");
-  timescaler_poll            = dlsym(RTLD_NEXT, "poll");
-  timescaler_select          = dlsym(RTLD_NEXT, "select");
-  timescaler_setitimer       = dlsym(RTLD_NEXT, "setitimer");
-  timescaler_sleep           = dlsym(RTLD_NEXT, "sleep");
-  timescaler_time            = dlsym(RTLD_NEXT, "time");
-  timescaler_times           = dlsym(RTLD_NEXT, "times");
-  timescaler_ualarm          = dlsym(RTLD_NEXT, "ualarm");
-  timescaler_usleep          = dlsym(RTLD_NEXT, "usleep");
+  /* Resolve the symbols that we will need afterward */
+#define HOOK(name) ts_config.funcs.name = dlsym(RTLD_NEXT, #name)
+  HOOK(alarm);
+  HOOK(clock_gettime);
+  HOOK(clock_nanosleep);
+  HOOK(epoll_pwait);
+  HOOK(epoll_wait);
+  HOOK(futex);
+  HOOK(getitimer);
+  HOOK(gettimeofday);
+  HOOK(nanosleep);
+  HOOK(pselect);
+  HOOK(poll);
+  HOOK(select);
+  HOOK(setitimer);
+  HOOK(sleep);
+  HOOK(time);
+  HOOK(times);
+  HOOK(ualarm);
+  HOOK(usleep);
+#undef HOOK
 
   /* Get some time references */
-  timescaler_initial_time = timescaler_time(NULL);
+  ts_config.initial.time = ts_config.funcs.time(NULL);
 
-  if(timescaler_clock_gettime)
+  if(ts_config.funcs.clock_gettime)
   {
     struct timespec tp;
-    timescaler_clock_gettime(CLOCK_REALTIME, &tp);
-    timescaler_initial_clock_realtime = tp.tv_sec;
-    timescaler_clock_gettime(CLOCK_MONOTONIC, &tp);
-    timescaler_initial_clock_monotonic = tp.tv_sec;
+    ts_config.funcs.clock_gettime(CLOCK_REALTIME, &tp);
+    ts_config.initial.clock_realtime = tp.tv_sec;
+    ts_config.funcs.clock_gettime(CLOCK_MONOTONIC, &tp);
+    ts_config.initial.clock_monotonic = tp.tv_sec;
   }
+  struct tms dummy;
+  ts_config.initial.times = ts_config.funcs.times(&dummy);
 
+  /* Print some informations about the configuration */
   timescaler_log(DEBUG, "Timescaler v%d.%d initialization finished with:", TIMESCALER_VERSION_MAJOR, TIMESCALER_VERSION_MINOR);
-  timescaler_log(DEBUG, " * verbosity=%d", timescaler_verbosity);
-  timescaler_log(DEBUG, " * scale=%f", timescaler_scale);
+  timescaler_log(DEBUG, " * verbosity=%d", ts_config.verbosity);
+  timescaler_log(DEBUG, " * scale=%f", ts_config.scale);
+}
+
+
+/**
+ * Transform a double into a timespec structure
+ * @param time: the time as a double
+ * @param t: the timespec structure
+ */
+LOCAL inline void double2timespec(double time, struct timespec *t)
+{
+  t->tv_sec = floor(time);
+  t->tv_nsec = (time - t->tv_sec) * 1000000000L;
+}
+
+
+/**
+ * Transform a timespec structure to a double
+ * @param t: the timespec structure
+ * @return the time as a double
+ */
+LOCAL inline double timespec2double(const struct timespec *t)
+{
+  return t->tv_sec + (double)t->tv_nsec / 1000000000L;
+}
+
+
+/**
+ * Transform a double into a timeval structure
+ * @param time: the time as a double
+ * @param t: the timeval structure
+ */
+LOCAL inline void double2timeval(double time, struct timeval *t)
+{
+  t->tv_sec = floor(time);
+  t->tv_usec = (time - t->tv_sec) * 1000000L;
+}
+
+
+/**
+ * Transform a timeval structure to a double
+ * @param t: the timeval structure
+ * @return the time as a double
+ */
+LOCAL inline double timeval2double(const struct timeval *t)
+{
+  return t->tv_sec + (double)t->tv_usec / 1000000L;
 }
 
 
@@ -289,10 +349,10 @@ GLOBAL unsigned int alarm(unsigned int seconds)
 {
   PROLOGUE();
 
-  if(unlikely(!is_hooked(ALARM)))
-    return timescaler_alarm(seconds);
+  if(unlikely(!IS_HOOKED(alarm)))
+    return ts_config.funcs.alarm(seconds);
 
-  return timescaler_alarm(seconds * timescaler_scale) / timescaler_scale;
+  return ts_config.funcs.alarm(seconds * ts_config.scale) / ts_config.scale;
 }
 
 
@@ -304,8 +364,8 @@ GLOBAL int clock_gettime(clockid_t clk_id, struct timespec *tp)
 {
   PROLOGUE();
 
-  if(unlikely(!is_hooked(CLOCK_GETTIME)))
-    return timescaler_clock_gettime(clk_id, tp);
+  if(unlikely(!IS_HOOKED(clock_gettime)))
+    return ts_config.funcs.clock_gettime(clk_id, tp);
 
   if(clk_id != CLOCK_REALTIME && clk_id != CLOCK_MONOTONIC)
   {
@@ -313,19 +373,18 @@ GLOBAL int clock_gettime(clockid_t clk_id, struct timespec *tp)
     return EINVAL;
   }
 
-  int return_value = timescaler_clock_gettime(clk_id, tp);
+  int return_value = ts_config.funcs.clock_gettime(clk_id, tp);
 
 
   double time;
-  double now = (tp->tv_sec + (double)tp->tv_nsec / 1000000000L);
+  double now = timespec2double(tp);
 
   if(clk_id == CLOCK_REALTIME)
-    time = timescaler_initial_clock_realtime + (now - timescaler_initial_clock_realtime) / timescaler_scale;
+    time = ts_config.initial.clock_realtime + (now - ts_config.initial.clock_realtime) / ts_config.scale;
   else
-    time = timescaler_initial_clock_monotonic + (now - timescaler_initial_clock_monotonic) / timescaler_scale;
+    time = ts_config.initial.clock_monotonic + (now - ts_config.initial.clock_monotonic) / ts_config.scale;
 
-  tp->tv_sec = floor(time);
-  tp->tv_nsec = (time - tp->tv_sec) * 1000000000L;
+  double2timespec(time, tp);
 
   return return_value;
 }
@@ -340,8 +399,8 @@ GLOBAL int clock_nanosleep(clockid_t clk_id, int flags,
 {
   PROLOGUE();
 
-  if(unlikely(!is_hooked(CLOCK_NANOSLEEP)))
-    return timescaler_clock_nanosleep(clk_id, flags, req, remain);
+  if(unlikely(!IS_HOOKED(clock_nanosleep)))
+    return ts_config.funcs.clock_nanosleep(clk_id, flags, req, remain);
 
   if(clk_id != CLOCK_REALTIME && clk_id != CLOCK_MONOTONIC)
   {
@@ -350,26 +409,62 @@ GLOBAL int clock_nanosleep(clockid_t clk_id, int flags,
   }
 
   /* Transform the time to a double */
-  double time = (req->tv_sec + (double)req->tv_nsec / 1000000000L);
+  double time = timespec2double(req);
 
   /* Transform an absolute wait into a relative one */
   if(flags == TIMER_ABSTIME)
   {
     struct timespec req_now;
-    timescaler_clock_gettime(clk_id, &req_now);
+    ts_config.funcs.clock_gettime(clk_id, &req_now);
 
-    time -= req_now.tv_sec + (double)req_now.tv_nsec / 1000000000L;
+    time -= timespec2double(&req_now);
     if(time <= 0.0)
       return 0;
   }
 
   /* TODO: check the return value for remaining time to sleep */
-  struct timespec req_scale = { };
-  req_scale.tv_sec = floor(time);
-  req_scale.tv_nsec = (time - req_scale.tv_sec) * 1000000000L;
+  struct timespec req_scale;
+  double2timespec(time, &req_scale);
 
-  int return_value = timescaler_clock_nanosleep(clk_id, 0, &req_scale, remain);
+  int return_value = ts_config.funcs.clock_nanosleep(clk_id, 0, &req_scale, remain);
   return return_value;
+}
+
+
+/**
+ * The epoll_pwait function
+ */
+GLOBAL int epoll_pwait(int epfd, struct epoll_event *events, int maxevents,
+                       int timeout, const sigset_t *sigmask)
+{
+  PROLOGUE();
+
+  /* No need to scale if if the timeout is 0 (return immediately) or -1
+     (infinite) */
+  if(unlikely(!IS_HOOKED(epoll_pwait) || timeout <= 0))
+    return ts_config.funcs.epoll_pwait(epfd, events, maxevents, timeout,
+                                       sigmask);
+
+  return ts_config.funcs.epoll_pwait(epfd, events, maxevents,
+                                     timeout * ts_config.scale, sigmask);
+}
+
+
+/**
+ * The epoll_wait function
+ */
+GLOBAL int epoll_wait(int epfd, struct epoll_event *events, int maxevents,
+                      int timeout)
+{
+  PROLOGUE();
+
+  /* No need to scale if if the timeout is 0 (return immediately) or -1
+     (infinite) */
+  if(unlikely(!IS_HOOKED(epoll_wait) || timeout <= 0))
+    return ts_config.funcs.epoll_wait(epfd, events, maxevents, timeout);
+
+  return ts_config.funcs.epoll_wait(epfd, events, maxevents,
+                                    timeout * ts_config.scale);
 }
 
 
@@ -383,16 +478,14 @@ GLOBAL int futex(int *uaddr, int op, int val, const struct timespec *timeout,
 
   /* We only have to support the FUTEX_WAIT operation */
   /* The other ones ignore the timeout argument */
-  if(unlikely(!is_hooked(FUTEX)) || op != FUTEX_WAIT)
-    return timescaler_futex(uaddr, op, val, timeout, uaddr2, val3);
+  if(unlikely(!IS_HOOKED(futex)) || op != FUTEX_WAIT)
+    return ts_config.funcs.futex(uaddr, op, val, timeout, uaddr2, val3);
 
-  struct timespec timeout_scale = { };
+  struct timespec timeout_scale;
+  double time = timespec2double(timeout) * ts_config.scale;
+  double2timespec(time, &timeout_scale);
 
-  double time = (timeout->tv_sec + (double)timeout->tv_nsec / 1000000000L) * timescaler_scale;
-  timeout_scale.tv_sec = floor(time);
-  timeout_scale.tv_nsec = (time - timeout_scale.tv_sec) * 1000000000L;
-
-  return timescaler_futex(uaddr, op, val, &timeout_scale, uaddr2, val3);
+  return ts_config.funcs.futex(uaddr, op, val, &timeout_scale, uaddr2, val3);
 }
 
 /**
@@ -402,18 +495,15 @@ GLOBAL int getitimer(int which, struct itimerval *curr_value)
 {
   PROLOGUE();
 
-  if(unlikely(!is_hooked(GETITIMER)))
-    return timescaler_getitimer(which, curr_value);
+  if(unlikely(!IS_HOOKED(getitimer)))
+    return ts_config.funcs.getitimer(which, curr_value);
 
-  int return_value = timescaler_getitimer(which, curr_value);
-  double value = (curr_value->it_value.tv_sec + (double)(curr_value->it_value.tv_usec) / 1000000L) / timescaler_scale;
-  double interval = (curr_value->it_interval.tv_sec + (double)(curr_value->it_interval.tv_usec) / 1000000L) / timescaler_scale;
+  int return_value = ts_config.funcs.getitimer(which, curr_value);
+  double value = timeval2double(&curr_value->it_value) / ts_config.scale;
+  double interval = timeval2double(&curr_value->it_interval) / ts_config.scale;
 
-  curr_value->it_value.tv_sec = floor(value);
-  curr_value->it_interval.tv_sec = floor(interval);
-
-  curr_value->it_value.tv_usec = (value - curr_value->it_value.tv_sec) * 1000000L;
-  curr_value->it_interval.tv_usec = (value - curr_value->it_interval.tv_sec) * 1000000L;
+  double2timeval(value, &(curr_value->it_value));
+  double2timeval(interval, &(curr_value->it_interval));
 
   return return_value;
 }
@@ -426,15 +516,14 @@ GLOBAL int gettimeofday(struct timeval *tv, struct timezone *tz)
 {
   PROLOGUE();
 
-  if(unlikely(!is_hooked(GETTIMEOFDAY)))
-    return timescaler_gettimeofday(tv, tz);
+  if(unlikely(!IS_HOOKED(gettimeofday)))
+    return ts_config.funcs.gettimeofday(tv, tz);
 
-  int return_value = timescaler_gettimeofday(tv, tz);
-  double now = (tv->tv_sec + (double)tv->tv_usec / 1000000L);
-  double time = timescaler_initial_time + (now - timescaler_initial_time) / timescaler_scale;
+  int return_value = ts_config.funcs.gettimeofday(tv, tz);
+  double now = timeval2double(tv);
+  double time = ts_config.initial.time + (now - ts_config.initial.time) / ts_config.scale;
 
-  tv->tv_sec = floor(time);
-  tv->tv_usec = (time - tv->tv_sec) * 1000000L;
+  double2timeval(time, tv);
 
   return return_value;
 }
@@ -447,22 +536,19 @@ GLOBAL int nanosleep(const struct timespec *req, struct timespec *rem)
 {
   PROLOGUE();
 
-  if(unlikely(!is_hooked(NANOSLEEP)))
-    return timescaler_nanosleep(req, rem);
+  if(unlikely(!IS_HOOKED(nanosleep)))
+    return ts_config.funcs.nanosleep(req, rem);
 
-  struct timespec req_scale = { };
+  struct timespec req_scale;
+  double time = timespec2double(req) * ts_config.scale;
+  double2timespec(time, &req_scale);
 
-  double time = (req->tv_sec + (double)req->tv_nsec / 1000000000L) * timescaler_scale;
-  req_scale.tv_sec = floor(time);
-  req_scale.tv_nsec = (time - req_scale.tv_sec) * 1000000000L;
-
-  int return_value = timescaler_nanosleep(&req_scale, rem);
+  int return_value = ts_config.funcs.nanosleep(&req_scale, rem);
 
   if(return_value != 0 && rem)
   {
-    double rem_time = (rem->tv_sec + (double)rem->tv_nsec / 1000000000L) / timescaler_scale;
-    rem->tv_sec = floor(rem_time);
-    rem->tv_nsec = (rem_time - rem->tv_sec) * 1000000000L;
+    double rem_time = timespec2double(rem) / ts_config.scale;
+    double2timespec(rem_time, rem);
   }
 
   return return_value;
@@ -475,11 +561,13 @@ GLOBAL int nanosleep(const struct timespec *req, struct timespec *rem)
 GLOBAL int poll(struct pollfd *fds, nfds_t nfds, int timeout)
 {
   PROLOGUE();
-  if(unlikely(!is_hooked(POLL)))
-    return timescaler_poll(fds, nfds, timeout);
+  if(unlikely(!IS_HOOKED(poll)))
+    return ts_config.funcs.poll(fds, nfds, timeout);
 
   /* If the timeout is negative, no need to scale it */
-  return timescaler_poll(fds, nfds, timeout < 0 ? timeout : timeout * timescaler_scale);
+  return ts_config.funcs.poll(fds, nfds, timeout < 0 ?
+                                         timeout :
+                                         timeout * ts_config.scale);
 }
 
 
@@ -492,23 +580,24 @@ int pselect(int nfds, fd_set *readfds, fd_set *writefds,
 {
   PROLOGUE();
 
-  if(unlikely(!is_hooked(PSELECT)))
-    return timescaler_pselect(nfds, readfds, writefds, exceptfds, timeout, sigmask);
+  if(unlikely(!IS_HOOKED(pselect)))
+    return ts_config.funcs.pselect(nfds, readfds, writefds, exceptfds, timeout,
+                                   sigmask);
 
   /* The timeout can be NULL, which mean that pselect will wait forever */
   if(timeout)
   {
     /* Scale the timeout */
-    double time = (timeout->tv_sec + (double)timeout->tv_nsec / 1000000000L) * timescaler_scale;
+    double time = timespec2double(timeout) * ts_config.scale;
     struct timespec timeout_scale;
-    timeout_scale.tv_sec = floor(time);
-    timeout_scale.tv_nsec = (time - timeout_scale.tv_sec) * 1000000000L;
+    double2timespec(time, &timeout_scale);
 
-    return timescaler_pselect(nfds, readfds, writefds, exceptfds, &timeout_scale,
-                              sigmask);
+    return ts_config.funcs.pselect(nfds, readfds, writefds, exceptfds,
+                                   &timeout_scale, sigmask);
   }
   else
-    return timescaler_pselect(nfds, readfds, writefds, exceptfds, NULL, sigmask);
+    return ts_config.funcs.pselect(nfds, readfds, writefds, exceptfds, NULL,
+                                   sigmask);
 }
 
 
@@ -520,31 +609,30 @@ int select(int nfds, fd_set *readfds, fd_set *writefds,
 {
   PROLOGUE();
 
-  if(unlikely(!is_hooked(SELECT)))
-    return timescaler_select(nfds, readfds, writefds, exceptfds, timeout);
+  if(unlikely(!IS_HOOKED(select)))
+    return ts_config.funcs.select(nfds, readfds, writefds, exceptfds, timeout);
 
   /* The timeout can be NULL, which mean that pselect will wait forever */
   if(timeout)
   {
     int return_value;
     /* Scale the timeout */
-    double time = (timeout->tv_sec + (double)timeout->tv_usec / 1000000L) * timescaler_scale;
+    double time = timeval2double(timeout) * ts_config.scale;
     struct timeval timeout_scale;
-    timeout_scale.tv_sec = floor(time);
-    timeout_scale.tv_usec = (time - timeout_scale.tv_sec) * 1000000L;
+    double2timeval(time, &timeout_scale);
 
     /* Call the real function */
-    return_value = timescaler_select(nfds, readfds, writefds, exceptfds, &timeout_scale);
+    return_value = ts_config.funcs.select(nfds, readfds, writefds, exceptfds,
+                                          &timeout_scale);
 
     /* Un-scale the returned timeout (remaining time) */
-    time = (timeout_scale.tv_sec + (double)timeout_scale.tv_usec / 1000000L) / timescaler_scale;
-    timeout->tv_sec = floor(time);
-    timeout->tv_usec = (time - timeout->tv_sec) * 1000000L;
+    time = timeval2double(&timeout_scale) / ts_config.scale;
+    double2timeval(time, timeout);
 
     return return_value;
   }
   else
-    return timescaler_select(nfds, readfds, writefds, exceptfds, NULL);
+    return ts_config.funcs.select(nfds, readfds, writefds, exceptfds, NULL);
 }
 
 
@@ -556,35 +644,31 @@ GLOBAL int setitimer(int which, const struct itimerval *new_value,
 {
   PROLOGUE();
 
-  if(unlikely(!is_hooked(SETITIMER)))
-    return timescaler_setitimer(which, new_value, old_value);
+  if(unlikely(!IS_HOOKED(setitimer)))
+    return ts_config.funcs.setitimer(which, new_value, old_value);
 
   struct itimerval new_value_scale;
-  double value = (new_value->it_value.tv_sec + (double)(new_value->it_value.tv_usec) / 1000000L) * timescaler_scale;
-  double interval = (new_value->it_interval.tv_sec + (double)(new_value->it_interval.tv_usec) / 1000000L) * timescaler_scale;
-  new_value_scale.it_value.tv_sec = floor(value);
-  new_value_scale.it_interval.tv_sec = floor(interval);
+  double value = timeval2double(&new_value->it_value) * ts_config.scale;
+  double interval = timeval2double(&new_value->it_interval) * ts_config.scale;
+  double2timeval(value, &(new_value_scale.it_value));
+  double2timeval(interval, &(new_value_scale.it_interval));
 
-  new_value_scale.it_value.tv_usec = (value - new_value_scale.it_value.tv_sec) * 1000000L;
-  new_value_scale.it_interval.tv_usec = (interval - new_value_scale.it_interval.tv_sec) * 1000000L;
-
-  int return_value = timescaler_setitimer(which, &new_value_scale, old_value);
+  int return_value = ts_config.funcs.setitimer(which, &new_value_scale,
+                                               old_value);
 
   // Change the old_value if not NULL
   if(old_value)
   {
-    value = (old_value->it_value.tv_sec + (double)(old_value->it_value.tv_usec) / 1000000L) / timescaler_scale;
-    interval = (old_value->it_interval.tv_sec + (double)(old_value->it_interval.tv_usec) / 1000000L) / timescaler_scale;
+    value = timeval2double(&old_value->it_value) / ts_config.scale;
+    interval = timeval2double(&old_value->it_interval) / ts_config.scale;
 
-    old_value->it_value.tv_sec = floor(value);
-    old_value->it_interval.tv_sec = floor(interval);
-
-    old_value->it_value.tv_usec = (value - old_value->it_value.tv_sec) * 1000000L;
-    old_value->it_interval.tv_usec = (interval - old_value->it_interval.tv_usec) * 1000000L;
+    double2timeval(value, &(old_value->it_value));
+    double2timeval(interval, &(old_value->it_interval));
   }
 
   return return_value;
 }
+
 
 /**
  * The sleep function
@@ -593,11 +677,11 @@ GLOBAL unsigned int sleep(unsigned int seconds)
 {
   PROLOGUE();
 
-  if(unlikely(!is_hooked(SLEEP)))
-    return timescaler_sleep(seconds);
+  if(unlikely(!IS_HOOKED(sleep)))
+    return ts_config.funcs.sleep(seconds);
 
-  unsigned int return_value = timescaler_sleep(seconds * timescaler_scale);
-  return return_value / timescaler_scale;
+  unsigned int return_value = ts_config.funcs.sleep(seconds * ts_config.scale);
+  return return_value / ts_config.scale;
 }
 
 
@@ -608,11 +692,11 @@ GLOBAL time_t time(time_t* tp)
 {
   PROLOGUE();
 
-  if(unlikely(!is_hooked(TIME)))
-    return timescaler_time(tp);
+  if(unlikely(!IS_HOOKED(time)))
+    return ts_config.funcs.time(tp);
 
-  time_t now = timescaler_time(NULL);
-  time_t return_value = timescaler_initial_time + (double)(now - timescaler_initial_time) / timescaler_scale;
+  time_t now = ts_config.funcs.time(NULL);
+  time_t return_value = ts_config.initial.time + (double)(now - ts_config.initial.time) / ts_config.scale;
 
   if(tp)
     *tp = return_value;
@@ -628,17 +712,19 @@ clock_t times(struct tms *buf)
 {
   PROLOGUE();
 
-  if(unlikely(!is_hooked(TIMES)))
-    return timescaler_times(buf);
+  if(unlikely(!IS_HOOKED(times)))
+    return ts_config.funcs.times(buf);
 
-  clock_t return_value = timescaler_times(buf);
-  buf->tms_utime = buf->tms_utime / timescaler_scale;
-  buf->tms_stime = buf->tms_stime / timescaler_scale;
-  buf->tms_cutime = buf->tms_cutime / timescaler_scale;
-  buf->tms_cstime = buf->tms_cstime / timescaler_scale;
+  clock_t return_value = ts_config.funcs.times(buf);
+  buf->tms_utime = buf->tms_utime / ts_config.scale;
+  buf->tms_stime = buf->tms_stime / ts_config.scale;
+  buf->tms_cutime = buf->tms_cutime / ts_config.scale;
+  buf->tms_cstime = buf->tms_cstime / ts_config.scale;
 
-  // TODO: also change the return value
-  return return_value;
+  if(return_value == (clock_t)-1)
+    return return_value;
+  else
+    return ts_config.initial.times + (return_value - ts_config.initial.times) / ts_config.scale;
 }
 
 
@@ -649,10 +735,11 @@ useconds_t ualarm(useconds_t usecs, useconds_t interval)
 {
   PROLOGUE();
 
-  if(unlikely(!is_hooked(UALARM)))
-    return timescaler_ualarm(usecs, interval);
+  if(unlikely(!IS_HOOKED(ualarm)))
+    return ts_config.funcs.ualarm(usecs, interval);
 
-  return timescaler_ualarm(usecs * timescaler_scale, interval * timescaler_scale) / timescaler_scale;
+  return ts_config.funcs.ualarm(usecs * ts_config.scale,
+                                interval * ts_config.scale) / ts_config.scale;
 }
 
 
@@ -663,8 +750,8 @@ int usleep(useconds_t usec)
 {
   PROLOGUE();
 
-  if(unlikely(!is_hooked(USLEEP)))
-    return timescaler_usleep(usec);
+  if(unlikely(!IS_HOOKED(usleep)))
+    return ts_config.funcs.usleep(usec);
 
-  return timescaler_usleep(usec * timescaler_scale);
+  return ts_config.funcs.usleep(usec * ts_config.scale);
 }

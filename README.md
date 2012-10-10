@@ -1,4 +1,4 @@
-Timescaler
+timescaler
 ==========
 This library allows to hook time-related function from the libc in order to
 scale the time. The hooked program will see the time running slower than the
@@ -28,16 +28,19 @@ timescaler comes with some options to control the hooks:
 
 * TIMESCALER_VERBOSITY: set the verbosity from 0 to 3
 * TIMESCALER_SCALE: set the scaling applied to the time as a floating point
-* TIMESCALER_HOOKS: coma seperated list of functions to hook. timescaler will
+* TIMESCALER_HOOKS: coma separated list of functions to hook. timescaler will
   only hook the selected functions.
 
 
 Implemented function:
 ---------------------
-timescaler handles the folowing list of time-dependant functions:
+timescaler handles the following list of time-dependent functions:
 
+* alarm
 * clock_gettime
 * clock_nanosleep
+* epoll_pwait
+* epoll_wait
 * futex
 * getitimer
 * gettimeofday
