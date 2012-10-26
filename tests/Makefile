@@ -1,10 +1,10 @@
 TEST_SUITES = perl-5.16.1
 RUN_TEST_SUITES = $(addprefix run_, $(TEST_SUITES))
 
-all: $(RUN_TEST_SUITES)
+check: $(RUN_TEST_SUITES)
 
 run_perl-5.16.1: perl-5.16.1
-	(cd $< && ./Configure -de && make && http_proxy='' TIMESCALER_SCALE=2 LD_PRELOAD=$(PWD)/../timescaler.so make test)
+	(cd $< && ./Configure -de && make && http_proxy='' TIMESCALER_SCALE=2 LD_PRELOAD=`pwd`/../../timescaler.so make test)
 
 perl-5.16.1: perl-5.16.1.tar.gz
 	tar xf $<

@@ -20,6 +20,6 @@ uninstall:
 	$(RM) $(PREFIX)/lib/timescaler.so
 
 check:
-	make -C tests
+	make -C tests check
 
 .PHONY: clean install uninstall check
