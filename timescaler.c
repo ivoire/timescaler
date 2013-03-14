@@ -66,7 +66,7 @@
  */
 LOCAL struct {
   int initialized;
-  int verbosity;
+  unsigned verbosity;
   float scale;
 
   // Initial value for some functions
