@@ -12,7 +12,7 @@ perl-5.16.1: perl-5.16.1.tar.gz
 perl-5.16.1.tar.gz:
 	wget http://www.cpan.org/src/5.0/$@
 
-run_coreutils-8.21: coreutils-8.21.tar.xz
+run_coreutils-8.21: coreutils-8.21
 	(cd $< && ./configure && make && TIMESCALER_SCALE=2 LD_PRELOAD=`pwd`/../../timescaler.so RUN_VERY_EXPENSIVE_TESTS=yes make check)
 
 coreutils-8.21: coreutils-8.21.tar.xz
