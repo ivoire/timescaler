@@ -2,7 +2,7 @@ RM      = rm
 INSTALL = install
 PREFIX  = /usr/local
 CC      = gcc
-CFLAGS  = -Wall -O2
+CFLAGS  = -Wall -Wextra -O2
 LDFLAGS = -ldl -lrt -lm -fPIC
 
 
@@ -19,4 +19,7 @@ install: timescaler.so
 uninstall:
 	$(RM) $(PREFIX)/lib/timescaler.so
 
-.PHONY: clean install uninstall
+check:
+	$(MAKE) -C tests check
+
+.PHONY: clean install uninstall check

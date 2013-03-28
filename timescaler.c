@@ -58,7 +58,7 @@
 
 /** Current version */
 #define TIMESCALER_VERSION_MAJOR 0
-#define TIMESCALER_VERSION_MINOR 2
+#define TIMESCALER_VERSION_MINOR 3
 
 
 /**
@@ -66,7 +66,7 @@
  */
 LOCAL struct {
   int initialized;
-  int verbosity;
+  unsigned verbosity;
   float scale;
 
   // Initial value for some functions
