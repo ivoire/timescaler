@@ -25,6 +25,6 @@ clean:
 	rm -rf $(TEST_SUITES)
 
 distclean:
-	rm -rf $(TEST_SUITES) $(addsuffix .tar.gz, $(TEST_SUITES))
+	rm -rf $(TEST_SUITES) $(addsuffix .tar.gz, $(TEST_SUITES)) $(addsuffix .tar.xz, $(TEST_SUITES))
 
 .PHONY: all clean distclean
