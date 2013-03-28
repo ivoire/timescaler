@@ -58,7 +58,7 @@
 
 /** Current version */
 #define TIMESCALER_VERSION_MAJOR 0
-#define TIMESCALER_VERSION_MINOR 2
+#define TIMESCALER_VERSION_MINOR 3
 
 
 /**
