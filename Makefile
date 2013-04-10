@@ -11,6 +11,10 @@ timescaler.so: timescaler.c Makefile
 
 clean:
 	$(RM) -f timescaler.so
+	$(MAKE) -C tests clean
+
+distclean: clean
+	$(MAKE) -C tests distclean
 
 install: timescaler.so
 	$(INSTALL) -d $(PREFIX)/lib

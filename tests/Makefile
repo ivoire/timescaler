@@ -24,7 +24,7 @@ coreutils-8.21.tar.xz:
 clean:
 	rm -rf $(TEST_SUITES)
 
-distclean:
-	rm -rf $(TEST_SUITES) $(addsuffix .tar.gz, $(TEST_SUITES)) $(addsuffix .tar.xz, $(TEST_SUITES))
+distclean: clean
+	rm -rf $(addsuffix .tar.gz, $(TEST_SUITES)) $(addsuffix .tar.xz, $(TEST_SUITES))
 
 .PHONY: all clean distclean
