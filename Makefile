@@ -23,7 +23,7 @@ install: timescaler.so
 uninstall:
 	$(RM) $(PREFIX)/lib/timescaler.so
 
-check:
+check: timescaler.so
 	$(MAKE) -C tests check
 
 .PHONY: clean install uninstall check
